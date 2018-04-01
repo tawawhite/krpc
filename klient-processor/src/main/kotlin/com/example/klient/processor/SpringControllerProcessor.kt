@@ -69,6 +69,7 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle nested method paths
 // TODO : Handle flux, Deferred, etc
+// TODO : Shadowed variables
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
 		const val httpClientName = "httpClient"
@@ -250,7 +251,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 
 			// Method
-			val httpMethod = getHttpMethod(method)
+			val httpMethods = getHttpMethods(method)
+			val httpMethod = httpMethods.firstOrNull() ?: HttpMethod.POST
 			addStatement("val %N = %T.%L", httpMethodName, HttpMethod::class, httpMethod)
 
 			// HttpRequest
@@ -301,38 +303,22 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return ""
 	}
 
-	private fun getHttpMethod(method: ExecutableElement): HttpMethod {
-		val annotation = MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()
-		val httpMethod = getRequestMappingMethod(annotation)
-		if (httpMethod == null) {
-			if (MoreElements.isAnnotationPresent(method.enclosingElement, RequestMapping::class.java)) {
-				val parentAnnotation = MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).get()
-				val parentHttpMethod = getRequestMappingMethod(parentAnnotation)
-				if (parentHttpMethod != null) {
-					return parentHttpMethod
-				}
-			}
-			env.messager.printMessage(Diagnostic.Kind.ERROR, "You have to specify the HTTP method", method, annotation)
-			return HttpMethod.GET
-		} else {
-			return httpMethod
-		}
+	private fun getHttpMethods(method: ExecutableElement): List<HttpMethod> {
+		return getRequestMappingMethod(MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()) +
+				MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).transform { getRequestMappingMethod(it!!) }.or(emptyList())
 	}
 
-	private fun getRequestMappingMethod(annotation: AnnotationMirror): HttpMethod? {
+	private fun getRequestMappingMethod(annotation: AnnotationMirror): List<HttpMethod> {
 		val values = annotation.elementValues
 		values.entries.forEach { (key, value) ->
 			val simpleName = key.simpleName.toString()
 			if (simpleName == "method") {
 				@Suppress("UNCHECKED_CAST")
 				val methods = value.value as List<AnnotationValue>
-				if (methods.isNotEmpty()) {
-					val element = methods[0].value as VariableElement
-					return HttpMethod.valueOf(element.simpleName.toString())
-				}
+				return methods.map { HttpMethod.valueOf((it.value as VariableElement).simpleName.toString()) }
 			}
 		}
-		return null
+		return emptyList()
 	}
 
 	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>) {

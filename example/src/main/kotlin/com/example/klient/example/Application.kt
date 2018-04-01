@@ -15,11 +15,11 @@ import org.springframework.web.bind.annotation.RestController
 class Application
 
 @RestController
-@RequestMapping("/hello")
+@RequestMapping("/hello", method = [RequestMethod.DELETE])
 @GenerateClient("HelloClient")
 class HelloController {
 
-	@RequestMapping("/{aPathVariable}", method = [RequestMethod.POST])
+	@RequestMapping("/test/{aPathVariable}", method = [RequestMethod.POST])
 	fun echo(@RequestBody theBody: String,
 			 @RequestParam aRequestParam: Int,
 			 @RequestHeader aHeader: String,
@@ -32,10 +32,13 @@ class HelloController {
 		""".trimMargin()
 	}
 
-	@RequestMapping("/{userId}", method = [RequestMethod.PUT])
+	@RequestMapping("/user/{userId}", method = [RequestMethod.PUT])
 	fun saveUser(@RequestBody user: User, @PathVariable userId: Int) {
 		println("Saving user $user with id $userId")
 	}
+
+	@RequestMapping
+	fun sayHello(@RequestBody body: String) = "Hello $body"
 
 }
 
