@@ -46,12 +46,20 @@ import kotlin.reflect.jvm.internal.impl.platform.JavaToKotlinClassMap
 
 @AutoService(Processor::class)
 class SpringControllerProcessor : BasicAnnotationProcessor() {
+	companion object {
+		const val outputDirOption = "klient.outputDir"
+	}
+
 	override fun getSupportedSourceVersion(): SourceVersion {
 		return SourceVersion.latestSupported()
 	}
 
 	override fun initSteps(): Iterable<ProcessingStep> {
 		return listOf(ProcessingStep(processingEnv))
+	}
+
+	override fun getSupportedOptions(): Set<String> {
+		return setOf(outputDirOption)
 	}
 }
 
@@ -60,6 +68,7 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Restriction of methods instead of taking first and multiple methods doing the same thing if multiple methods
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle nested method paths
+// TODO : Handle flux, Deferred, etc
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
 		const val httpClientName = "httpClient"
@@ -67,7 +76,6 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		const val baseUrlName = "baseUrl"
 	}
 
-	private val generatedDirectory = Paths.get(env.options["kapt.kotlin.generated"])
 	private val functionsByClass = LinkedListMultimap.create<String, FunSpec>()
 
 	override fun annotations(): Set<Class<out Annotation>> {
@@ -75,6 +83,12 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	override fun process(elements: SetMultimap<Class<out Annotation>, Element>): Set<Element> {
+		if (!env.options.containsKey(SpringControllerProcessor.outputDirOption)) {
+			env.messager.printMessage(Diagnostic.Kind.ERROR, "Klient : you have to specify the output directory with the following processor option : ${SpringControllerProcessor.outputDirOption}")
+			return emptySet()
+		}
+		val generatedDirectory = Paths.get(env.options[SpringControllerProcessor.outputDirOption])
+
 		val annotatedClasses = ElementFilter.typesIn(elements[GenerateClient::class.java])
 		val annotatedMethods = ElementFilter.methodsIn(elements[GenerateClient::class.java])
 		val methodsToConsider = annotatedMethods + annotatedClasses.flatMap { ElementFilter.methodsIn(it.enclosedElements) }
