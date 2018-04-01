@@ -2,7 +2,8 @@ package com.example.klient.processor
 
 @Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.SOURCE)
-annotation class GenerateClient
+annotation class GenerateClient(val className: String = "",
+								val packageName: String = "")
 
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.SOURCE)

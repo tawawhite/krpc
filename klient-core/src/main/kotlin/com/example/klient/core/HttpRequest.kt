@@ -4,9 +4,11 @@ enum class HttpMethod {
 	DELETE,
 	GET,
 	HEAD,
+	OPTIONS,
 	PATCH,
 	POST,
 	PUT,
+	TRACE
 }
 
 data class HttpRequestBody(val content: String,

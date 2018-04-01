@@ -1,6 +1,9 @@
 package com.example.klient.processor
 
+import com.example.klient.core.HttpCallException
 import com.example.klient.core.HttpClient
+import com.example.klient.core.HttpMethod
+import com.example.klient.core.HttpRequest
 import com.example.klient.core.HttpRequestBody
 import com.example.klient.core.Serializer
 import com.google.auto.common.BasicAnnotationProcessor
@@ -18,6 +21,7 @@ import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asTypeName
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestBody
@@ -34,9 +38,9 @@ import javax.lang.model.element.AnnotationMirror
 import javax.lang.model.element.AnnotationValue
 import javax.lang.model.element.Element
 import javax.lang.model.element.ExecutableElement
-import javax.lang.model.element.TypeElement
 import javax.lang.model.element.VariableElement
 import javax.lang.model.util.ElementFilter
+import javax.tools.Diagnostic
 import kotlin.reflect.jvm.internal.impl.name.FqName
 import kotlin.reflect.jvm.internal.impl.platform.JavaToKotlinClassMap
 
@@ -52,8 +56,10 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 }
 
 // TODO : Support GetMapping, etc
-// TODO : Handle nullability and required = false in annotations
-// TODO : Handle path variable
+// TODO : Handle nullability (in return type too) and required = false in annotations
+// TODO : Restriction of methods instead of taking first and multiple methods doing the same thing if multiple methods
+// TODO : Check invalid position of GenerateClient annotation
+// TODO : Handle nested method paths
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
 		const val httpClientName = "httpClient"
@@ -69,18 +75,12 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	override fun process(elements: SetMultimap<Class<out Annotation>, Element>): Set<Element> {
-		ElementFilter.typesIn(elements[GenerateClient::class.java]).forEach { type ->
-			val className = generatedClassName(type)
-			ElementFilter.methodsIn(type.enclosedElements).forEach { method ->
-				if (shouldIncludeMethod(method)) {
-					functionsByClass.put(className, getFunction(method))
-				}
-			}
-		}
-
-		ElementFilter.methodsIn(elements[GenerateClient::class.java]).forEach { method ->
+		val annotatedClasses = ElementFilter.typesIn(elements[GenerateClient::class.java])
+		val annotatedMethods = ElementFilter.methodsIn(elements[GenerateClient::class.java])
+		val methodsToConsider = annotatedMethods + annotatedClasses.flatMap { ElementFilter.methodsIn(it.enclosedElements) }
+		methodsToConsider.toSet().forEach { method ->
 			if (shouldIncludeMethod(method)) {
-				val className = generatedClassName(MoreElements.asType(method.enclosingElement))
+				val className = generatedClassName(method)
 				functionsByClass.put(className, getFunction(method))
 			}
 		}
@@ -121,37 +121,67 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				|| MoreElements.isAnnotationPresent(method.enclosingElement, RestController::class.java))
 	}
 
-	private fun generatedClassName(type: TypeElement) = type.qualifiedName.toString() + "_Client"
+	private fun generatedClassName(method: ExecutableElement): String {
+		val parentElement = MoreElements.asType(method.enclosingElement)
+		val parts = parentElement.qualifiedName.split(".")
+		val defaultPackageName = parts.subList(0, parts.lastIndex).joinToString(".")
+		val defaultClassName = parentElement.simpleName.toString() + "_Client"
+		if (MoreElements.isAnnotationPresent(method, GenerateClient::class.java)) {
+			val annotation = method.getAnnotation(GenerateClient::class.java)
+			if (annotation.className != "" || annotation.packageName != "") {
+				val className = if (annotation.className != "") annotation.className else defaultClassName
+				val packageName = if (annotation.packageName != "") annotation.packageName else defaultPackageName
+				return "$packageName.$className"
+			}
+		}
+		if (MoreElements.isAnnotationPresent(parentElement, GenerateClient::class.java)) {
+			val annotation = parentElement.getAnnotation(GenerateClient::class.java)
+			if (annotation.className != "" || annotation.packageName != "") {
+				val className = if (annotation.className != "") annotation.className else defaultClassName
+				val packageName = if (annotation.packageName != "") annotation.packageName else defaultPackageName
+				return "$packageName.$className"
+			}
+		}
+		return "$defaultPackageName.$defaultClassName"
+	}
 
 	private fun getFunction(method: ExecutableElement): FunSpec {
 		val builder = FunSpec.builder(method.simpleName.toString()).addModifiers(KModifier.SUSPEND)
-		builder.addParameters(method.parameters.mapNotNull { element ->
-			if (shouldIncludeParam(element)) {
-				val name = element.simpleName.toString()
-				val type = element.asType().asTypeName().javaToKotlinType()
-				ParameterSpec.builder(name, type)
-						.jvmModifiers(element.modifiers)
-						.build()
+		with(builder) {
+			// Parameters
+			addParameters(method.parameters.mapNotNull { element ->
+				if (shouldIncludeParam(element)) {
+					val name = element.simpleName.toString()
+					val type = element.asType().asTypeName().javaToKotlinType()
+					ParameterSpec.builder(name, type)
+							.jvmModifiers(element.modifiers)
+							.build()
+				} else {
+					null
+				}
+			})
+
+			// Return type
+			val returnType = method.returnType.asTypeName().javaToKotlinType()
+			returns(returnType)
+
+			// Local variables
+			val bodyContentName = "bodyContent"
+			val bodyName = "body"
+			val mediaType = "application/json"
+			val headersName = "headers"
+			val paramsName = "params"
+			val pathVariablesName = "pathVariables"
+			val urlName = "url"
+			val httpMethodName = "method"
+			val httpRequestName = "httpRequest"
+			val httpResponseName = "httpResponse"
+
+			// Body
+			val body = method.parameters.firstOrNull { MoreElements.isAnnotationPresent(it, RequestBody::class.java) }
+			if (body == null) {
+				addStatement("val %N = null", bodyName)
 			} else {
-				null
-			}
-		})
-//		builder.returns(method.returnType.asTypeName().javaToKotlinType())
-
-		val bodyContentName = "bodyContent"
-		val bodyName = "body"
-		val mediaType = "application/json"
-		val headersName = "headers"
-		val paramsName = "params"
-		val pathVariablesName = "pathVariables"
-		val urlName = "url"
-
-		// Body
-		val body = method.parameters.firstOrNull { MoreElements.isAnnotationPresent(it, RequestBody::class.java) }
-		if (body == null) {
-			builder.addStatement("val %N = null", bodyName)
-		} else {
-			with(builder) {
 				if (MoreTypes.isTypeOf(String::class.java, body.asType())) {
 					addStatement("val %N = %N", bodyContentName, body.simpleName)
 				} else {
@@ -159,31 +189,29 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				}
 				addStatement("val %N = %T(%N, %S)", bodyName, HttpRequestBody::class, bodyContentName, mediaType)
 			}
-		}
 
-		// Headers
-		val headers = method.parameters.filter { MoreElements.isAnnotationPresent(it, RequestHeader::class.java) }
-		if (headers.isEmpty()) {
-			builder.addStatement("val %N = emptyMap<%T, %T>()", headersName, String::class, String::class)
-		} else {
-			createStringMap(builder, headersName, headers, RequestHeader::class.java)
-		}
+			// Headers
+			val headers = method.parameters.filter { MoreElements.isAnnotationPresent(it, RequestHeader::class.java) }
+			if (headers.isEmpty()) {
+				addStatement("val %N = emptyMap<%T, %T>()", headersName, String::class, String::class)
+			} else {
+				createStringMap(builder, headersName, headers, RequestHeader::class.java)
+			}
 
-		// Request Params
-		val params = method.parameters.filter { MoreElements.isAnnotationPresent(it, RequestParam::class.java) }
-		if (params.isNotEmpty()) {
-			createStringMap(builder, paramsName, params, RequestParam::class.java)
-		}
+			// Request Params
+			val params = method.parameters.filter { MoreElements.isAnnotationPresent(it, RequestParam::class.java) }
+			if (params.isNotEmpty()) {
+				createStringMap(builder, paramsName, params, RequestParam::class.java)
+			}
 
-		// Path variables
-		val pathVariables = method.parameters.filter { MoreElements.isAnnotationPresent(it, PathVariable::class.java) }
-		if (pathVariables.isNotEmpty()) {
-			createStringMap(builder, pathVariablesName, pathVariables, PathVariable::class.java)
-		}
+			// Path variables
+			val pathVariables = method.parameters.filter { MoreElements.isAnnotationPresent(it, PathVariable::class.java) }
+			if (pathVariables.isNotEmpty()) {
+				createStringMap(builder, pathVariablesName, pathVariables, PathVariable::class.java)
+			}
 
-		// URL
-		val url = getUrl(method)
-		with(builder) {
+			// URL
+			val url = getUrl(method)
 			if (params.isEmpty() && pathVariables.isEmpty()) {
 				if (url != "") {
 					addStatement("val %N = %N + %S", urlName, baseUrlName, url)
@@ -206,11 +234,29 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			if (params.isNotEmpty()) {
 				addStatement("%N += %S + %N.toList().joinToString(%S) { %S }", urlName, "?", paramsName, "&", "\${it.first}=\${it.second}")
 			}
+
+			// Method
+			val httpMethod = getHttpMethod(method)
+			addStatement("val %N = %T.%L", httpMethodName, HttpMethod::class, httpMethod)
+
+			// HttpRequest
+			addStatement("val %N = %T(%N, %N, %N, %N)", httpRequestName, HttpRequest::class, urlName, httpMethodName, bodyName, headersName)
+
+			// HttpResponse
+			addStatement("val %N = %N.send(%N)", httpResponseName, httpClientName, httpRequestName)
+			addStatement("if (!%N.status.successful) {", httpResponseName)
+			addStatement("%>throw %T(%N)", HttpCallException::class, httpResponseName)
+			addStatement("%<}")
+
+			if (returnType != UNIT) {
+				// TODO handle nullability
+				if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
+					addStatement("return %N.body!!.content", httpResponseName)
+				} else {
+					addStatement("return %N.fromJson(%N.body!!.content, %T::class.java)", serializerName, httpResponseName, returnType)
+				}
+			}
 		}
-
-		// Method
-
-
 		return builder.build()
 	}
 
@@ -229,6 +275,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		values.entries.forEach { (key, value) ->
 			val simpleName = key.simpleName.toString()
 			if (simpleName == "value" || simpleName == "path") {
+				@Suppress("UNCHECKED_CAST")
 				val paths = value.value as List<AnnotationValue>
 				return if (paths.isNotEmpty()) {
 					paths[0].value as String
@@ -238,6 +285,40 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 		}
 		return ""
+	}
+
+	private fun getHttpMethod(method: ExecutableElement): HttpMethod {
+		val annotation = MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()
+		val httpMethod = getRequestMappingMethod(annotation)
+		if (httpMethod == null) {
+			if (MoreElements.isAnnotationPresent(method.enclosingElement, RequestMapping::class.java)) {
+				val parentAnnotation = MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).get()
+				val parentHttpMethod = getRequestMappingMethod(parentAnnotation)
+				if (parentHttpMethod != null) {
+					return parentHttpMethod
+				}
+			}
+			env.messager.printMessage(Diagnostic.Kind.ERROR, "You have to specify the HTTP method", method, annotation)
+			return HttpMethod.GET
+		} else {
+			return httpMethod
+		}
+	}
+
+	private fun getRequestMappingMethod(annotation: AnnotationMirror): HttpMethod? {
+		val values = annotation.elementValues
+		values.entries.forEach { (key, value) ->
+			val simpleName = key.simpleName.toString()
+			if (simpleName == "method") {
+				@Suppress("UNCHECKED_CAST")
+				val methods = value.value as List<AnnotationValue>
+				if (methods.isNotEmpty()) {
+					val element = methods[0].value as VariableElement
+					return HttpMethod.valueOf(element.simpleName.toString())
+				}
+			}
+		}
+		return null
 	}
 
 	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>) {

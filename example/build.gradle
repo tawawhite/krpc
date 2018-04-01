@@ -4,8 +4,11 @@ apply plugin: 'org.springframework.boot'
 apply plugin: 'io.spring.dependency-management'
 
 dependencies {
+	compile project(':klient-okhttp')
+	compile project(':klient-gson')
 	compileOnly project(':klient-processor')
 	kapt project(':klient-processor')
 	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
+	compile 'org.jetbrains.kotlin:kotlin-reflect'
 	compile 'org.springframework.boot:spring-boot-starter-web'
 }
