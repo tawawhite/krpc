@@ -15,29 +15,29 @@ import org.springframework.web.bind.annotation.RestController
 class Application
 
 @RestController
-@RequestMapping("/hello", method = [RequestMethod.DELETE])
+@RequestMapping("/hello")
 @GenerateClient("HelloClient")
 class HelloController {
 
-	@RequestMapping("/test/{aPathVariable}", method = [RequestMethod.POST])
-	fun echo(@RequestBody theBody: String,
-			 @RequestParam aRequestParam: Int,
-			 @RequestHeader aHeader: String,
-			 @PathVariable aPathVariable: Long): String {
+	@RequestMapping("/{pathVariable}", method = [RequestMethod.POST])
+	fun echo(@RequestBody body: String,
+			 @RequestParam requestParam: Int,
+			 @RequestHeader header: String,
+			 @PathVariable pathVariable: Long): String {
 		return """I received:
-			|theBody: $theBody
-			|aRequestParam: $aRequestParam
-			|aHeader: $aHeader
-			|aPathVariable: $aPathVariable
+			|body: $body
+			|requestParam: $requestParam
+			|header: $header
+			|pathVariable: $pathVariable
 		""".trimMargin()
 	}
 
-	@RequestMapping("/user/{userId}", method = [RequestMethod.PUT])
+	@RequestMapping("/{userId}", method = [RequestMethod.PUT])
 	fun saveUser(@RequestBody user: User, @PathVariable userId: Int) {
 		println("Saving user $user with id $userId")
 	}
 
-	@RequestMapping
+	@RequestMapping(method = [RequestMethod.GET])
 	fun sayHello(@RequestBody body: String) = "Hello $body"
 
 }

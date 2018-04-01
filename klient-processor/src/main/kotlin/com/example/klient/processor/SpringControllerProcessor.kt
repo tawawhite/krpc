@@ -65,7 +65,6 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 
 // TODO : Support GetMapping, etc
 // TODO : Handle nullability (in return type too) and required = false in annotations
-// TODO : Restriction of methods instead of taking first and multiple methods doing the same thing if multiple methods
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle nested method paths
 // TODO : Handle flux, Deferred, etc
@@ -96,7 +95,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		methodsToConsider.toSet().forEach { method ->
 			if (shouldIncludeMethod(method)) {
 				val className = generatedClassName(method)
-				functionsByClass.put(className, getFunction(method))
+				val httpMethods = getHttpMethods(method)
+				if (httpMethods.size == 1) {
+					functionsByClass.put(className, getMainFunction(method, httpMethods[0]))
+				} else {
+					httpMethods.forEach { functionsByClass.put(className, getForwardedFunction(method, it)) }
+					functionsByClass.put(className, getMainFunction(method, null))
+				}
 			}
 		}
 
@@ -160,26 +165,22 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return "$defaultPackageName.$defaultClassName"
 	}
 
-	private fun getFunction(method: ExecutableElement): FunSpec {
+	private fun getForwardedFunction(method: ExecutableElement, httpMethod: HttpMethod): FunSpec {
+		val builder = FunSpec.builder(method.simpleName.toString() + "_${httpMethod.name.toLowerCase()}")
+				.addModifiers(KModifier.SUSPEND)
+		addParametersAndReturnType(builder, method)
+		val parameters = method.parameters.joinToString(", ") { it.simpleName.toString() }
+		if (parameters.isEmpty()) {
+			builder.addStatement("return %N(%T.%L)", method.simpleName.toString(), HttpMethod::class, httpMethod)
+		} else {
+			builder.addStatement("return %N(%T.%L, %N)", method.simpleName.toString(), HttpMethod::class, httpMethod, parameters)
+		}
+		return builder.build()
+	}
+
+	private fun getMainFunction(method: ExecutableElement, httpMethod: HttpMethod?): FunSpec {
 		val builder = FunSpec.builder(method.simpleName.toString()).addModifiers(KModifier.SUSPEND)
 		with(builder) {
-			// Parameters
-			addParameters(method.parameters.mapNotNull { element ->
-				if (shouldIncludeParam(element)) {
-					val name = element.simpleName.toString()
-					val type = element.asType().asTypeName().javaToKotlinType()
-					ParameterSpec.builder(name, type)
-							.jvmModifiers(element.modifiers)
-							.build()
-				} else {
-					null
-				}
-			})
-
-			// Return type
-			val returnType = method.returnType.asTypeName().javaToKotlinType()
-			returns(returnType)
-
 			// Local variables
 			val bodyContentName = "bodyContent"
 			val bodyName = "body"
@@ -191,6 +192,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			val httpMethodName = "method"
 			val httpRequestName = "httpRequest"
 			val httpResponseName = "httpResponse"
+
+			// Parameters & return type
+			if (httpMethod == null) {
+				addModifiers(KModifier.PRIVATE)
+				addParameter(ParameterSpec.builder(httpMethodName, HttpMethod::class).build())
+			}
+			addParametersAndReturnType(this, method)
 
 			// Body
 			val body = method.parameters.firstOrNull { MoreElements.isAnnotationPresent(it, RequestBody::class.java) }
@@ -251,9 +259,9 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 
 			// Method
-			val httpMethods = getHttpMethods(method)
-			val httpMethod = httpMethods.firstOrNull() ?: HttpMethod.POST
-			addStatement("val %N = %T.%L", httpMethodName, HttpMethod::class, httpMethod)
+			if (httpMethod != null) {
+				addStatement("val %N = %T.%L", httpMethodName, HttpMethod::class, httpMethod)
+			}
 
 			// HttpRequest
 			addStatement("val %N = %T(%N, %N, %N, %N)", httpRequestName, HttpRequest::class, urlName, httpMethodName, bodyName, headersName)
@@ -264,6 +272,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			addStatement("%>throw %T(%N)", HttpCallException::class, httpResponseName)
 			addStatement("%<}")
 
+			val returnType = method.returnType.asTypeName()
 			if (returnType != UNIT) {
 				// TODO handle nullability
 				if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
@@ -274,6 +283,22 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 		}
 		return builder.build()
+	}
+
+	private fun addParametersAndReturnType(builder: FunSpec.Builder, method: ExecutableElement) {
+		builder.addParameters(method.parameters.mapNotNull { element ->
+			if (shouldIncludeParam(element)) {
+				val name = element.simpleName.toString()
+				val type = element.asType().asTypeName().javaToKotlinType()
+				ParameterSpec.builder(name, type)
+						.jvmModifiers(element.modifiers)
+						.build()
+			} else {
+				null
+			}
+		})
+
+		builder.returns(method.returnType.asTypeName().javaToKotlinType())
 	}
 
 	private fun getUrl(method: ExecutableElement): String {
@@ -304,8 +329,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	private fun getHttpMethods(method: ExecutableElement): List<HttpMethod> {
-		return getRequestMappingMethod(MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()) +
+		val methods = getRequestMappingMethod(MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()) +
 				MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).transform { getRequestMappingMethod(it!!) }.or(emptyList())
+		return if (methods.isEmpty()) {
+			HttpMethod.values().toList()
+		} else {
+			methods
+		}
 	}
 
 	private fun getRequestMappingMethod(annotation: AnnotationMirror): List<HttpMethod> {
