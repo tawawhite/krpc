@@ -1,0 +1,11 @@
+apply plugin: 'kotlin-kapt'
+apply plugin: 'kotlin-spring'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+
+dependencies {
+	compileOnly project(':klient-processor')
+	kapt project(':klient-processor')
+	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
+	compile 'org.springframework.boot:spring-boot-starter-web'
+}
