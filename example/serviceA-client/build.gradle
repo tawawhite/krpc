@@ -1,0 +1,4 @@
+dependencies {
+	compile project(':serviceA-shared') // DTOs
+	compile 'com.example:klient-core:0.1.0-SNAPSHOT'
+}

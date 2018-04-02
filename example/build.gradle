@@ -1,19 +1,46 @@
-apply plugin: 'kotlin-kapt'
-apply plugin: 'kotlin-spring'
-apply plugin: 'org.springframework.boot'
-apply plugin: 'io.spring.dependency-management'
-
-dependencies {
-	compile project(':example-shared')
-	compileOnly project(':klient-processor')
-	kapt project(':klient-processor')
-	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
-	compile 'org.jetbrains.kotlin:kotlin-reflect'
-	compile 'org.springframework.boot:spring-boot-starter-web'
+buildscript {
+	ext {
+		kotlinVersion = '1.2.31'
+		springBootVersion = '2.0.0.RELEASE'
+	}
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
+		classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}"
+		classpath "org.jetbrains.kotlin:kotlin-allopen:${kotlinVersion}"
+	}
 }
 
-kapt {
-	arguments {
-		arg("klient.outputDir", buildDir.toPath().resolve("generated/source/kaptKotlin/main"))
+subprojects {
+	apply plugin: 'kotlin'
+
+	group = 'com.example'
+	version = '0.1.0-SNAPSHOT'
+	sourceCompatibility = 1.8
+
+	repositories {
+		mavenCentral()
+		mavenLocal()
+	}
+
+	compileKotlin {
+		kotlinOptions {
+			freeCompilerArgs = ["-Xjsr305=strict"]
+			jvmTarget = "1.8"
+		}
+	}
+	compileTestKotlin {
+		kotlinOptions {
+			freeCompilerArgs = ["-Xjsr305=strict"]
+			jvmTarget = "1.8"
+		}
+	}
+
+	kotlin {
+		experimental {
+			coroutines "enable"
+		}
 	}
 }

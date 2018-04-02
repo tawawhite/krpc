@@ -2,3 +2,6 @@
 .idea/
 build/
 *.iml
+
+# Generated code
+example/serviceA-client/src/

@@ -69,6 +69,7 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Handle nested method paths
 // TODO : Handle flux, Deferred, etc
 // TODO : Shadowed variables
+// TODO : Factory, autoconfiguration
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
 		const val httpClientName = "httpClient"
