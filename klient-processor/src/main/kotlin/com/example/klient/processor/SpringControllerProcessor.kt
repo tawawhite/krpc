@@ -76,6 +76,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		const val baseUrlName = "baseUrl"
 	}
 
+	private val generatedDirectory = Paths.get(env.options[SpringControllerProcessor.outputDirOption] ?: env.options["kapt.kotlin.generated"])
 	private val functionsByClass = LinkedListMultimap.create<String, FunSpec>()
 
 	override fun annotations(): Set<Class<out Annotation>> {
@@ -83,11 +84,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	override fun process(elements: SetMultimap<Class<out Annotation>, Element>): Set<Element> {
-		if (!env.options.containsKey(SpringControllerProcessor.outputDirOption)) {
-			env.messager.printMessage(Diagnostic.Kind.ERROR, "Klient : you have to specify the output directory with the following processor option : ${SpringControllerProcessor.outputDirOption}")
-			return emptySet()
-		}
-		val generatedDirectory = Paths.get(env.options[SpringControllerProcessor.outputDirOption])
+		env.messager.printMessage(Diagnostic.Kind.ERROR, "Klient : sources will be generated in $generatedDirectory")
 
 		val annotatedClasses = ElementFilter.typesIn(elements[GenerateClient::class.java])
 		val annotatedMethods = ElementFilter.methodsIn(elements[GenerateClient::class.java])
