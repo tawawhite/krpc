@@ -84,7 +84,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	override fun process(elements: SetMultimap<Class<out Annotation>, Element>): Set<Element> {
-		env.messager.printMessage(Diagnostic.Kind.ERROR, "Klient : sources will be generated in $generatedDirectory")
+		env.messager.printMessage(Diagnostic.Kind.NOTE, "Klient: sources will be generated in $generatedDirectory")
 
 		val annotatedClasses = ElementFilter.typesIn(elements[GenerateClient::class.java])
 		val annotatedMethods = ElementFilter.methodsIn(elements[GenerateClient::class.java])
