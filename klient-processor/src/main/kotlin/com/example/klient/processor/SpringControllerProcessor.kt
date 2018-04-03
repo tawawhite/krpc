@@ -67,9 +67,7 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Support GetMapping, etc
 // TODO : Handle nullability (in return type too) and required = false in annotations
 // TODO : Check invalid position of GenerateClient annotation
-// TODO : Handle nested method paths
 // TODO : Handle flux, Deferred, etc
-// TODO : Shadowed variables
 // TODO : Factory, autoconfiguration
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
@@ -110,9 +108,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				if (httpMethods.size == 1) {
 					functionsByClass.put(className, getMainFunction(method, httpMethods[0], nameAllocator.clone()))
 				} else {
-					val mainFunction = getMainFunction(method, null, nameAllocator)
 					httpMethods.forEach { functionsByClass.put(className, getForwardedFunction(method, it)) }
-					functionsByClass.put(className, mainFunction)
+					functionsByClass.put(className, getMainFunction(method, null, nameAllocator.clone()))
 				}
 			}
 		}
