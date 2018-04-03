@@ -1,6 +1,10 @@
 package com.example.klient.example
 
 import com.example.klient.processor.GenerateClient
+import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.NameAllocator
+import com.squareup.kotlinpoet.ParameterSpec
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -33,4 +37,16 @@ class HelloController {
 }
 
 fun main(args: Array<String>) {
+	val funSpec = FunSpec.builder("myFunction")
+	val parameter = ParameterSpec.builder("body", Int::class).build()
+	funSpec.addParameter(parameter)
+	val nameAllocator = NameAllocator()
+	nameAllocator.newName(parameter.name, parameter)
+	nameAllocator.newName("body", "body")
+
+	funSpec.addStatement("val %L = %L", nameAllocator.get("body"), 3)
+	funSpec.addStatement("println(%N)", nameAllocator.get(parameter))
+	FileSpec.builder("com.example", "MyFile")
+		.addFunction(funSpec.build())
+		.build().writeTo(System.out)
 }

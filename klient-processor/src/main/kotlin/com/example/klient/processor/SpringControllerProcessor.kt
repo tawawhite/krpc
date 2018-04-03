@@ -16,6 +16,7 @@ import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.NameAllocator
 import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.ParameterizedTypeName
 import com.squareup.kotlinpoet.PropertySpec
@@ -72,13 +73,18 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Factory, autoconfiguration
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
-		const val httpClientName = "httpClient"
-		const val serializerName = "serializer"
-		const val baseUrlName = "baseUrl"
+		private val httpClient = VariableTag("httpClient")
+		private val serializer = VariableTag("serializer")
+		private val baseUrl = VariableTag("baseUrl")
 	}
 
-	private val generatedDirectory = Paths.get(env.options[SpringControllerProcessor.outputDirOption] ?: env.options["kapt.kotlin.generated"])
+	// No data class because we need equals with === semantic
+	private class VariableTag(val name: String)
+
+	private val generatedDirectory = Paths.get(env.options[SpringControllerProcessor.outputDirOption]
+		?: env.options["kapt.kotlin.generated"])
 	private val functionsByClass = LinkedListMultimap.create<String, FunSpec>()
+	private val nameAllocatorByClass = hashMapOf<String, NameAllocator>()
 
 	override fun annotations(): Set<Class<out Annotation>> {
 		return setOf(GenerateClient::class.java)
@@ -93,50 +99,62 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		methodsToConsider.toSet().forEach { method ->
 			if (shouldIncludeMethod(method)) {
 				val className = generatedClassName(method)
+				val nameAllocator = nameAllocatorByClass.getOrPut(className) {
+					NameAllocator().apply {
+						newName(httpClient.name, httpClient)
+						newName(serializer.name, serializer)
+						newName(baseUrl.name, baseUrl)
+					}
+				}
 				val httpMethods = getHttpMethods(method)
 				if (httpMethods.size == 1) {
-					functionsByClass.put(className, getMainFunction(method, httpMethods[0]))
+					functionsByClass.put(className, getMainFunction(method, httpMethods[0], nameAllocator.clone()))
 				} else {
+					val mainFunction = getMainFunction(method, null, nameAllocator)
 					httpMethods.forEach { functionsByClass.put(className, getForwardedFunction(method, it)) }
-					functionsByClass.put(className, getMainFunction(method, null))
+					functionsByClass.put(className, mainFunction)
 				}
 			}
 		}
 
 		functionsByClass.asMap().forEach { qualifiedName, functions ->
+			val nameAllocator = nameAllocatorByClass[qualifiedName]!!
 			val parts = qualifiedName.split(".")
 			val packageName = parts.subList(0, parts.size - 1).joinToString(".")
 			val className = parts.last()
+			val httpClientName = nameAllocator.get(httpClient)
+			val serializerName = nameAllocator.get(serializer)
+			val baseUrlName = nameAllocator.get(baseUrl)
 			val typeSpec = TypeSpec.classBuilder(className)
-					.primaryConstructor(FunSpec.constructorBuilder()
-							.addParameter(httpClientName, HttpClient::class)
-							.addParameter(serializerName, Serializer::class)
-							.addParameter(baseUrlName, String::class)
-							.build())
-					.addProperty(PropertySpec.builder(httpClientName, HttpClient::class, KModifier.PRIVATE)
-							.initializer(httpClientName)
-							.build())
-					.addProperty(PropertySpec.builder(serializerName, Serializer::class, KModifier.PRIVATE)
-							.initializer(serializerName)
-							.build())
-					.addProperty(PropertySpec.builder(baseUrlName, String::class, KModifier.PRIVATE)
-							.initializer(baseUrlName)
-							.build())
-					.addFunctions(functions).build()
+				.primaryConstructor(FunSpec.constructorBuilder()
+					.addParameter(httpClientName, HttpClient::class)
+					.addParameter(serializerName, Serializer::class)
+					.addParameter(baseUrlName, String::class)
+					.build())
+				.addProperty(PropertySpec.builder(httpClientName, HttpClient::class, KModifier.PRIVATE)
+					.initializer(httpClientName)
+					.build())
+				.addProperty(PropertySpec.builder(serializerName, Serializer::class, KModifier.PRIVATE)
+					.initializer(serializerName)
+					.build())
+				.addProperty(PropertySpec.builder(baseUrlName, String::class, KModifier.PRIVATE)
+					.initializer(baseUrlName)
+					.build())
+				.addFunctions(functions).build()
 			FileSpec.builder(packageName, className)
-					.addType(typeSpec)
-					.build()
-					.writeTo(generatedDirectory)
+				.addType(typeSpec)
+				.build()
+				.writeTo(generatedDirectory)
 		}
 		return emptySet()
 	}
 
 	private fun shouldIncludeMethod(method: ExecutableElement): Boolean {
 		return !MoreElements.isAnnotationPresent(method, IgnoreMapping::class.java)
-				&& MoreElements.isAnnotationPresent(method, RequestMapping::class.java)
-				&& (MoreElements.isAnnotationPresent(method, ResponseBody::class.java)
-				|| MoreElements.isAnnotationPresent(method.enclosingElement, ResponseBody::class.java)
-				|| MoreElements.isAnnotationPresent(method.enclosingElement, RestController::class.java))
+			&& MoreElements.isAnnotationPresent(method, RequestMapping::class.java)
+			&& (MoreElements.isAnnotationPresent(method, ResponseBody::class.java)
+			|| MoreElements.isAnnotationPresent(method.enclosingElement, ResponseBody::class.java)
+			|| MoreElements.isAnnotationPresent(method.enclosingElement, RestController::class.java))
 	}
 
 	private fun generatedClassName(method: ExecutableElement): String {
@@ -165,8 +183,9 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun getForwardedFunction(method: ExecutableElement, httpMethod: HttpMethod): FunSpec {
 		val builder = FunSpec.builder(method.simpleName.toString() + "_${httpMethod.name.toLowerCase()}")
-				.addModifiers(KModifier.SUSPEND)
-		addParametersAndReturnType(builder, method)
+			.addModifiers(KModifier.SUSPEND)
+		// We don't need to be careful about overriding properties name given that we just forward the arguments
+		addParametersAndReturnType(builder, method, NameAllocator())
 		val parameters = method.parameters.joinToString(", ") { it.simpleName.toString() }
 		if (parameters.isEmpty()) {
 			builder.addStatement("return %N(%T.%L)", method.simpleName.toString(), HttpMethod::class, httpMethod)
@@ -176,27 +195,31 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return builder.build()
 	}
 
-	private fun getMainFunction(method: ExecutableElement, httpMethod: HttpMethod?): FunSpec {
+	private fun getMainFunction(method: ExecutableElement, httpMethod: HttpMethod?, nameAllocator: NameAllocator): FunSpec {
 		val builder = FunSpec.builder(method.simpleName.toString()).addModifiers(KModifier.SUSPEND)
 		with(builder) {
-			// Local variables
-			val bodyContentName = "bodyContent"
-			val bodyName = "body"
-			val mediaType = "application/json"
-			val headersName = "headers"
-			val paramsName = "params"
-			val pathVariablesName = "pathVariables"
-			val urlName = "url"
-			val httpMethodName = "method"
-			val httpRequestName = "httpRequest"
-			val httpResponseName = "httpResponse"
+			// Allocated names
+			val baseUrlName = nameAllocator.get(baseUrl)
+			val httpClientName = nameAllocator.get(httpClient)
+			val serializerName = nameAllocator.get(serializer)
 
 			// Parameters & return type
+			val httpMethodName = VariableTag("httpMethod").run { nameAllocator.newName(this.name, this) }
 			if (httpMethod == null) {
 				addModifiers(KModifier.PRIVATE)
 				addParameter(ParameterSpec.builder(httpMethodName, HttpMethod::class).build())
 			}
-			addParametersAndReturnType(this, method)
+			addParametersAndReturnType(this, method, nameAllocator)
+
+			// Local variables
+			val bodyContentName = VariableTag("bodyContent").run { nameAllocator.newName(this.name, this) }
+			val bodyName = VariableTag("body").run { nameAllocator.newName(this.name, this) }
+			val headersName = VariableTag("headers").run { nameAllocator.newName(this.name, this) }
+			val paramsName = VariableTag("params").run { nameAllocator.newName(this.name, this) }
+			val pathVariablesName = VariableTag("pathVariables").run { nameAllocator.newName(this.name, this) }
+			val urlName = VariableTag("url").run { nameAllocator.newName(this.name, this) }
+			val httpRequestName = VariableTag("httpRequest").run { nameAllocator.newName(this.name, this) }
+			val httpResponseName = VariableTag("httpResponse").run { nameAllocator.newName(this.name, this) }
 
 			// Body
 			val body = method.parameters.firstOrNull { MoreElements.isAnnotationPresent(it, RequestBody::class.java) }
@@ -204,11 +227,11 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				addStatement("val %N = null", bodyName)
 			} else {
 				if (MoreTypes.isTypeOf(String::class.java, body.asType())) {
-					addStatement("val %N = %N", bodyContentName, body.simpleName)
+					addStatement("val %N = %N", bodyContentName, nameAllocator.get(body))
 				} else {
-					addStatement("val %N = %N.toJson(%N)", bodyContentName, serializerName, body.simpleName)
+					addStatement("val %N = %N.toJson(%N)", bodyContentName, serializer, nameAllocator.get(body))
 				}
-				addStatement("val %N = %T(%N, %S)", bodyName, HttpRequestBody::class, bodyContentName, mediaType)
+				addStatement("val %N = %T(%N, %S)", bodyName, HttpRequestBody::class, bodyContentName, "application/json")
 			}
 
 			// Headers
@@ -216,19 +239,19 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			if (headers.isEmpty()) {
 				addStatement("val %N = emptyMap<%T, %T>()", headersName, String::class, String::class)
 			} else {
-				createStringMap(builder, headersName, headers, RequestHeader::class.java)
+				createStringMap(builder, headersName, headers, RequestHeader::class.java, nameAllocator)
 			}
 
 			// Request Params
 			val params = method.parameters.filter { MoreElements.isAnnotationPresent(it, RequestParam::class.java) }
 			if (params.isNotEmpty()) {
-				createStringMap(builder, paramsName, params, RequestParam::class.java)
+				createStringMap(builder, paramsName, params, RequestParam::class.java, nameAllocator)
 			}
 
 			// Path variables
 			val pathVariables = method.parameters.filter { MoreElements.isAnnotationPresent(it, PathVariable::class.java) }
 			if (pathVariables.isNotEmpty()) {
-				createStringMap(builder, pathVariablesName, pathVariables, PathVariable::class.java)
+				createStringMap(builder, pathVariablesName, pathVariables, PathVariable::class.java, nameAllocator)
 			}
 
 			// URL
@@ -283,14 +306,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return builder.build()
 	}
 
-	private fun addParametersAndReturnType(builder: FunSpec.Builder, method: ExecutableElement) {
+	private fun addParametersAndReturnType(builder: FunSpec.Builder, method: ExecutableElement, nameAllocator: NameAllocator) {
 		builder.addParameters(method.parameters.mapNotNull { element ->
 			if (shouldIncludeParam(element)) {
-				val name = element.simpleName.toString()
+				nameAllocator.newName(element.simpleName.toString(), element)
+				val name = nameAllocator.get(element)
 				val type = element.asType().asTypeName().javaToKotlinType()
-				ParameterSpec.builder(name, type)
-						.jvmModifiers(element.modifiers)
-						.build()
+				ParameterSpec.builder(name, type).jvmModifiers(element.modifiers).build()
 			} else {
 				null
 			}
@@ -328,7 +350,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun getHttpMethods(method: ExecutableElement): List<HttpMethod> {
 		val methods = getRequestMappingMethod(MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()) +
-				MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).transform { getRequestMappingMethod(it!!) }.or(emptyList())
+			MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).transform { getRequestMappingMethod(it!!) }.or(emptyList())
 		return if (methods.isEmpty()) {
 			HttpMethod.values().toList()
 		} else {
@@ -339,8 +361,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	private fun getRequestMappingMethod(annotation: AnnotationMirror): List<HttpMethod> {
 		val values = annotation.elementValues
 		values.entries.forEach { (key, value) ->
-			val simpleName = key.simpleName.toString()
-			if (simpleName == "method") {
+			if (key.simpleName.toString() == "method") {
 				@Suppress("UNCHECKED_CAST")
 				val methods = value.value as List<AnnotationValue>
 				return methods.map { HttpMethod.valueOf((it.value as VariableElement).simpleName.toString()) }
@@ -349,16 +370,17 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return emptyList()
 	}
 
-	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>) {
+	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>, nameAllocator: NameAllocator) {
 		builder.addStatement("val %N = mapOf<%T, %T>(", mapName, String::class, String::class)
 		elements.forEachIndexed { index, variable ->
 			val prefix = if (index == 0) "%>%>" else ""
 			val suffix = if (index != elements.lastIndex) "," else ""
 			val paramName = getValueOrName(MoreElements.getAnnotationMirror(variable, annotation).get(), variable)
+			val variableName = nameAllocator.get(variable)
 			if (MoreTypes.isTypeOf(String::class.java, variable.asType())) {
-				builder.addStatement("$prefix%S to %N$suffix", paramName, variable.simpleName)
+				builder.addStatement("$prefix%S to %N$suffix", paramName, variableName)
 			} else {
-				builder.addStatement("$prefix%S to %N.toJson(%N)$suffix", paramName, serializerName, variable.simpleName)
+				builder.addStatement("$prefix%S to %N.toJson(%N)$suffix", paramName, nameAllocator.get(serializer), variableName)
 			}
 		}
 		builder.addStatement("%<%<)")
@@ -366,9 +388,9 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun shouldIncludeParam(element: VariableElement): Boolean {
 		return MoreElements.isAnnotationPresent(element, RequestBody::class.java)
-				|| MoreElements.isAnnotationPresent(element, RequestHeader::class.java)
-				|| MoreElements.isAnnotationPresent(element, RequestParam::class.java)
-				|| MoreElements.isAnnotationPresent(element, PathVariable::class.java)
+			|| MoreElements.isAnnotationPresent(element, RequestHeader::class.java)
+			|| MoreElements.isAnnotationPresent(element, RequestParam::class.java)
+			|| MoreElements.isAnnotationPresent(element, PathVariable::class.java)
 	}
 
 	private fun getValueOrName(annotation: AnnotationMirror, element: Element): String {
@@ -386,13 +408,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	private fun TypeName.javaToKotlinType(): TypeName {
 		return if (this is ParameterizedTypeName) {
 			ParameterizedTypeName.get(
-					rawType.javaToKotlinType() as ClassName,
-					*typeArguments.map { it.javaToKotlinType() }.toTypedArray()
+				rawType.javaToKotlinType() as ClassName,
+				*typeArguments.map { it.javaToKotlinType() }.toTypedArray()
 			)
 		} else {
 			val className =
-					JavaToKotlinClassMap.INSTANCE.mapJavaToKotlin(FqName(toString()))
-							?.asSingleFqName()?.asString()
+				JavaToKotlinClassMap.INSTANCE.mapJavaToKotlin(FqName(toString()))
+					?.asSingleFqName()?.asString()
 
 			return if (className == null) {
 				this
