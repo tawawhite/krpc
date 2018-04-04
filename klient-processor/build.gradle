@@ -11,4 +11,5 @@ dependencies {
 	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
 	compile 'org.jetbrains.kotlin:kotlin-reflect'
 	compile 'org.springframework:spring-web:5.0.4.RELEASE'
+	compile 'com.google.code.findbugs:jsr305:3.0.2'
 }

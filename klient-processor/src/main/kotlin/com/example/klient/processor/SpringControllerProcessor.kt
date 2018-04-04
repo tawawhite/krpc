@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.bind.annotation.RestController
 import java.nio.file.Paths
+import javax.annotation.Nullable
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.Processor
 import javax.lang.model.SourceVersion
@@ -308,14 +309,55 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			if (shouldIncludeParam(element)) {
 				nameAllocator.newName(element.simpleName.toString(), element)
 				val name = nameAllocator.get(element)
-				val type = element.asType().asTypeName().javaToKotlinType()
-				ParameterSpec.builder(name, type).jvmModifiers(element.modifiers).build()
+				val baseType = element.asType().asTypeName().javaToKotlinType()
+				val type = if (isParameterNullable(element)) baseType.asNullable() else baseType
+				ParameterSpec.builder(name, type)
+					.jvmModifiers(element.modifiers)
+					.build()
 			} else {
 				null
 			}
 		})
 
-		builder.returns(method.returnType.asTypeName().javaToKotlinType())
+		val baseReturnType = method.returnType.asTypeName().javaToKotlinType()
+		val returnType = if (isAnnotatedNullable(method)) baseReturnType.asNullable() else baseReturnType
+		builder.returns(returnType)
+	}
+
+	private fun shouldIncludeParam(element: VariableElement): Boolean {
+		return MoreElements.isAnnotationPresent(element, RequestBody::class.java)
+			|| MoreElements.isAnnotationPresent(element, RequestHeader::class.java)
+			|| MoreElements.isAnnotationPresent(element, RequestParam::class.java)
+			|| MoreElements.isAnnotationPresent(element, PathVariable::class.java)
+	}
+
+	private fun isParameterNullable(element: VariableElement): Boolean {
+		return isAnnotatedNullable(element)
+			|| isNotRequired(element, RequestBody::class.java)
+			|| isNotRequired(element, RequestHeader::class.java)
+			|| isNotRequired(element, RequestParam::class.java)
+			|| isNotRequired(element, PathVariable::class.java)
+	}
+
+	private fun isAnnotatedNullable(element: Element): Boolean {
+		return (MoreElements.isAnnotationPresent(element, Nullable::class.java)
+			|| MoreElements.isAnnotationPresent(element, org.jetbrains.annotations.Nullable::class.java)
+			|| MoreElements.isAnnotationPresent(element, org.springframework.lang.Nullable::class.java))
+	}
+
+	private fun isNotRequired(element: Element, annotationClass: Class<out Annotation>): Boolean {
+		if (!MoreElements.isAnnotationPresent(element, annotationClass)) {
+			return false
+		}
+
+		val annotation = MoreElements.getAnnotationMirror(element, annotationClass).get()
+		val values = annotation.elementValues
+		values.entries.forEach { (key, value) ->
+			if (key.simpleName.toString() == "required") {
+				return !(value.value as Boolean)
+			}
+		}
+		return false
 	}
 
 	private fun getUrl(method: ExecutableElement): String {
@@ -368,7 +410,12 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>, nameAllocator: NameAllocator) {
-		builder.addStatement("val %N = mapOf<%T, %T>(", mapName, String::class, String::class)
+		val hasNullable = elements.any { isParameterNullable(it) }
+		if (hasNullable) {
+			builder.addStatement("val %N = listOf<%T<%T, %T?>>(", mapName, Pair::class, String::class, String::class)
+		} else {
+			builder.addStatement("val %N = mapOf<%T, %T>(", mapName, String::class, String::class)
+		}
 		elements.forEachIndexed { index, variable ->
 			val prefix = if (index == 0) "%>%>" else ""
 			val suffix = if (index != elements.lastIndex) "," else ""
@@ -376,18 +423,18 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			val variableName = nameAllocator.get(variable)
 			if (MoreTypes.isTypeOf(String::class.java, variable.asType())) {
 				builder.addStatement("$prefix%S to %N$suffix", paramName, variableName)
-			} else {
+			} else if (!isParameterNullable(variable)) {
 				builder.addStatement("$prefix%S to %N.toJson(%N)$suffix", paramName, nameAllocator.get(serializer), variableName)
+			} else {
+				builder.addStatement("$prefix%S to %N.let { %N.toJson(it) }$suffix", paramName, variableName, nameAllocator.get(serializer))
 			}
 		}
-		builder.addStatement("%<%<)")
-	}
 
-	private fun shouldIncludeParam(element: VariableElement): Boolean {
-		return MoreElements.isAnnotationPresent(element, RequestBody::class.java)
-			|| MoreElements.isAnnotationPresent(element, RequestHeader::class.java)
-			|| MoreElements.isAnnotationPresent(element, RequestParam::class.java)
-			|| MoreElements.isAnnotationPresent(element, PathVariable::class.java)
+		if (hasNullable) {
+			builder.addStatement("%<%<).mapNotNull { (key, value) -> if (value != null) Pair(key, value) else null }.toMap()")
+		} else {
+			builder.addStatement("%<%<)")
+		}
 	}
 
 	private fun getValueOrName(annotation: AnnotationMirror, element: Element): String {

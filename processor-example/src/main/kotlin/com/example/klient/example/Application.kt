@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestMethod
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import javax.annotation.Nullable
 
 @RestController
 @RequestMapping("/hello")
@@ -20,8 +21,8 @@ class HelloController {
 
 	@RequestMapping("/{pathVariable}", method = [RequestMethod.POST])
 	fun echo(@RequestBody body: String,
-			 @RequestParam requestParam: Int,
-			 @RequestHeader header: String,
+			 @Nullable @RequestParam requestParam: Int,
+			 @RequestHeader(required = false) header: String,
 			 @PathVariable pathVariable: Long): String {
 		return """I received:
 			|body: $body
@@ -31,8 +32,9 @@ class HelloController {
 		""".trimMargin()
 	}
 
+	@Nullable
 	@RequestMapping(method = [RequestMethod.GET])
-	fun sayHello(@RequestBody body: String) = "Hello $body"
+	fun sayHello(@RequestBody body: String): String? = "Hello $body"
 
 }
 
