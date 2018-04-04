@@ -24,6 +24,7 @@ import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asTypeName
+import org.jetbrains.annotations.NotNull
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
@@ -32,7 +33,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.bind.annotation.RestController
 import java.nio.file.Paths
-import javax.annotation.Nullable
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.Processor
 import javax.lang.model.SourceVersion
@@ -291,13 +291,21 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			addStatement("%>throw %T(%N)", HttpCallException::class, httpResponseName)
 			addStatement("%<}")
 
-			val returnType = method.returnType.asTypeName()
+			val returnType = method.returnType.asTypeName().javaToKotlinType()
 			if (returnType != UNIT) {
 				// TODO handle nullability
-				if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
-					addStatement("return %N.body!!.content", httpResponseName)
+				if (isReturnTypeNotNull(method)) {
+					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
+						addStatement("return %N.body!!.content", httpResponseName)
+					} else {
+						addStatement("return %N.fromJson(%N.body!!.content, %T::class.java)", serializerName, httpResponseName, returnType)
+					}
 				} else {
-					addStatement("return %N.fromJson(%N.body!!.content, %T::class.java)", serializerName, httpResponseName, returnType)
+					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
+						addStatement("return %N.body?.content", httpResponseName)
+					} else {
+						addStatement("return %N.body?.content?.let { %N.fromJson(it, %T::class.java) }", httpResponseName, serializerName, returnType)
+					}
 				}
 			}
 		}
@@ -310,7 +318,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				nameAllocator.newName(element.simpleName.toString(), element)
 				val name = nameAllocator.get(element)
 				val baseType = element.asType().asTypeName().javaToKotlinType()
-				val type = if (isParameterNullable(element)) baseType.asNullable() else baseType
+				val type = if (!isNotNull(element)) baseType.asNullable() else baseType
 				ParameterSpec.builder(name, type)
 					.jvmModifiers(element.modifiers)
 					.build()
@@ -320,7 +328,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		})
 
 		val baseReturnType = method.returnType.asTypeName().javaToKotlinType()
-		val returnType = if (isAnnotatedNullable(method)) baseReturnType.asNullable() else baseReturnType
+		val returnType = if (!isReturnTypeNotNull(method)) baseReturnType.asNullable() else baseReturnType
 		builder.returns(returnType)
 	}
 
@@ -331,33 +339,14 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			|| MoreElements.isAnnotationPresent(element, PathVariable::class.java)
 	}
 
-	private fun isParameterNullable(element: VariableElement): Boolean {
-		return isAnnotatedNullable(element)
-			|| isNotRequired(element, RequestBody::class.java)
-			|| isNotRequired(element, RequestHeader::class.java)
-			|| isNotRequired(element, RequestParam::class.java)
-			|| isNotRequired(element, PathVariable::class.java)
+	private fun isNotNull(element: VariableElement): Boolean {
+		val isPrimitive = element.asType().kind.isPrimitive
+		return isPrimitive || MoreElements.isAnnotationPresent(element, NotNull::class.java)
 	}
 
-	private fun isAnnotatedNullable(element: Element): Boolean {
-		return (MoreElements.isAnnotationPresent(element, Nullable::class.java)
-			|| MoreElements.isAnnotationPresent(element, org.jetbrains.annotations.Nullable::class.java)
-			|| MoreElements.isAnnotationPresent(element, org.springframework.lang.Nullable::class.java))
-	}
-
-	private fun isNotRequired(element: Element, annotationClass: Class<out Annotation>): Boolean {
-		if (!MoreElements.isAnnotationPresent(element, annotationClass)) {
-			return false
-		}
-
-		val annotation = MoreElements.getAnnotationMirror(element, annotationClass).get()
-		val values = annotation.elementValues
-		values.entries.forEach { (key, value) ->
-			if (key.simpleName.toString() == "required") {
-				return !(value.value as Boolean)
-			}
-		}
-		return false
+	private fun isReturnTypeNotNull(method: ExecutableElement): Boolean {
+		val isPrimitive = method.returnType.kind.isPrimitive
+		return isPrimitive || MoreElements.isAnnotationPresent(method, NotNull::class.java)
 	}
 
 	private fun getUrl(method: ExecutableElement): String {
@@ -410,7 +399,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>, nameAllocator: NameAllocator) {
-		val hasNullable = elements.any { isParameterNullable(it) }
+		val hasNullable = elements.any { !isNotNull(it) }
 		if (hasNullable) {
 			builder.addStatement("val %N = listOf<%T<%T, %T?>>(", mapName, Pair::class, String::class, String::class)
 		} else {
@@ -423,7 +412,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			val variableName = nameAllocator.get(variable)
 			if (MoreTypes.isTypeOf(String::class.java, variable.asType())) {
 				builder.addStatement("$prefix%S to %N$suffix", paramName, variableName)
-			} else if (!isParameterNullable(variable)) {
+			} else if (isNotNull(variable)) {
 				builder.addStatement("$prefix%S to %N.toJson(%N)$suffix", paramName, nameAllocator.get(serializer), variableName)
 			} else {
 				builder.addStatement("$prefix%S to %N.let { %N.toJson(it) }$suffix", paramName, variableName, nameAllocator.get(serializer))
