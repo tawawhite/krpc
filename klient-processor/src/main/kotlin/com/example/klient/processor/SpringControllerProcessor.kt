@@ -183,10 +183,10 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			.addModifiers(KModifier.SUSPEND)
 		// We don't need to be careful about overriding properties name given that we just forward the arguments
 		addParametersAndReturnType(builder, method, NameAllocator())
-		val parameters = method.parameters.joinToString(", ") { it.simpleName.toString() }
-		if (parameters.isEmpty()) {
+		if (method.parameters.isEmpty()) {
 			builder.addStatement("return %N(%T.%L)", method.simpleName.toString(), HttpMethod::class, httpMethod)
 		} else {
+			val parameters = method.parameters.joinToString(", ") { it.simpleName.toString() }
 			builder.addStatement("return %N(%T.%L, %N)", method.simpleName.toString(), HttpMethod::class, httpMethod, parameters)
 		}
 		return builder.build()
@@ -226,7 +226,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				if (MoreTypes.isTypeOf(String::class.java, body.asType())) {
 					addStatement("val %N = %N", bodyContentName, nameAllocator.get(body))
 				} else {
-					addStatement("val %N = %N.toJson(%N)", bodyContentName, serializer, nameAllocator.get(body))
+					addStatement("val %N = %N.toJson(%N)", bodyContentName, nameAllocator.get(serializer), nameAllocator.get(body))
 				}
 				addStatement("val %N = %T(%N, %S)", bodyName, HttpRequestBody::class, bodyContentName, "application/json")
 			}
@@ -344,7 +344,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun isReturnTypeNotNull(method: ExecutableElement): Boolean {
 		val isPrimitive = method.returnType.kind.isPrimitive
-		return isPrimitive || MoreElements.isAnnotationPresent(method, NotNull::class.java)
+		val isUnit = method.returnType.asTypeName().javaToKotlinType() == UNIT
+		return isPrimitive || isUnit || MoreElements.isAnnotationPresent(method, NotNull::class.java)
 	}
 
 	private fun getUrl(method: ExecutableElement): String {

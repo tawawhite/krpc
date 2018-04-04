@@ -21,8 +21,8 @@ class HelloController {
 
 	@RequestMapping("/{pathVariable}", method = [RequestMethod.POST])
 	fun echo(@RequestBody body: String,
-			 @RequestParam requestParam: Int,
-			 @RequestHeader header: String,
+			 @RequestParam requestParam: Int?,
+			 @RequestHeader header: String?,
 			 @PathVariable pathVariable: Long): String {
 		return """I received:
 			|body: $body
@@ -38,7 +38,7 @@ class HelloController {
 	}
 
 	@RequestMapping(method = [RequestMethod.GET])
-	fun sayHello(@RequestBody body: String) = "Hello $body"
+	fun sayHello(@RequestBody body: String): String? = "Hello $body"
 
 }
 
