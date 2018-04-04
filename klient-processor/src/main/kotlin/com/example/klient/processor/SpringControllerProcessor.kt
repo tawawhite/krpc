@@ -66,7 +66,6 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 }
 
 // TODO : Support GetMapping, etc
-// TODO : Handle nullability (in return type too) and required = false in annotations
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle flux, Deferred, etc
 // TODO : Factory, autoconfiguration
@@ -293,7 +292,6 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 			val returnType = method.returnType.asTypeName().javaToKotlinType()
 			if (returnType != UNIT) {
-				// TODO handle nullability
 				if (isReturnTypeNotNull(method)) {
 					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
 						addStatement("return %N.body!!.content", httpResponseName)
