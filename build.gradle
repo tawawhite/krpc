@@ -12,28 +12,24 @@ buildscript {
 
 configure(subprojects.findAll {it.name != 'klient-core'}) {
 	apply plugin: 'kotlin'
-
-	compileKotlin {
-		kotlinOptions {
-			freeCompilerArgs = ["-Xjsr305=strict"]
-			jvmTarget = "1.8"
-		}
-	}
-	compileTestKotlin {
-		kotlinOptions {
-			freeCompilerArgs = ["-Xjsr305=strict"]
-			jvmTarget = "1.8"
-		}
-	}
 }
-
 project(':klient-core') {
 	apply plugin: 'kotlin-platform-common'
 }
 
-subprojects {
+configure(subprojects.findAll {it.name != 'processor-example'}) {
 	apply plugin: 'maven-publish'
 
+	publishing {
+		publications {
+			mavenJava(MavenPublication) {
+				from components.java
+			}
+		}
+	}
+}
+
+subprojects {
 	group = 'com.example'
 	version = '0.1.0-SNAPSHOT'
 	sourceCompatibility = 1.8
@@ -45,14 +41,6 @@ subprojects {
 	kotlin {
 		experimental {
 			coroutines "enable"
-		}
-	}
-
-	publishing {
-		publications {
-			mavenJava(MavenPublication) {
-				from components.java
-			}
 		}
 	}
 }
