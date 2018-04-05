@@ -1,5 +1,8 @@
+apply plugin: 'kotlin-platform-jvm'
+
 dependencies {
-	compile project(':klient-core')
+	expectedBy project(':klient-core')
+	compile 'org.jetbrains.kotlin:kotlin-stdlib'
 	compile 'com.squareup.okhttp3:okhttp:3.10.0'
 	compile 'org.jetbrains.kotlinx:kotlinx-coroutines-core:0.22.5'
 }

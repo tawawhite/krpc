@@ -74,7 +74,6 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Handle flux, Deferred, etc
 // TODO : Factory, auto-configuration
 // TODO : Read Spring MVC doc to catch special behaviors
-// TODO : Make it a multi-platform project
 // TODO : Write tests :(
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
@@ -98,7 +97,6 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		?: env.options["kapt.kotlin.generated"])
 	private val functionsByClass = LinkedListMultimap.create<String, FunSpec>()
 	private val nameAllocatorByClass = hashMapOf<String, NameAllocator>()
-
 	override fun annotations(): Set<Class<out Annotation>> {
 		return setOf(GenerateClient::class.java)
 	}
@@ -328,13 +326,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
 						addStatement("return %N.body!!.content", httpResponseName)
 					} else {
-						addStatement("return %N.fromJson(%N.body!!.content, %T::class.java)", serializerName, httpResponseName, returnType)
+						addStatement("return %N.fromJson(%N.body!!.content, %T::class)", serializerName, httpResponseName, returnType)
 					}
 				} else {
 					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
 						addStatement("return %N.body?.content", httpResponseName)
 					} else {
-						addStatement("return %N.body?.content?.let { %N.fromJson(it, %T::class.java) }", httpResponseName, serializerName, returnType)
+						addStatement("return %N.body?.content?.let { %N.fromJson(it, %T::class) }", httpResponseName, serializerName, returnType)
 					}
 				}
 			}
