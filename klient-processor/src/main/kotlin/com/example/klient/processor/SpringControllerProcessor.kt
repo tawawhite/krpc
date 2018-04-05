@@ -25,7 +25,12 @@ import com.squareup.kotlinpoet.TypeSpec
 import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.asTypeName
 import org.jetbrains.annotations.NotNull
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
@@ -65,7 +70,6 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 	}
 }
 
-// TODO : Support GetMapping, etc
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle flux, Deferred, etc
 // TODO : Factory, autoconfiguration
@@ -74,6 +78,14 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		private val httpClient = VariableTag("httpClient")
 		private val serializer = VariableTag("serializer")
 		private val baseUrl = VariableTag("baseUrl")
+
+		private val mappingAnnotations = mapOf(
+			GetMapping::class.java.canonicalName to HttpMethod.GET,
+			PostMapping::class.java.canonicalName to HttpMethod.POST,
+			PutMapping::class.java.canonicalName to HttpMethod.PUT,
+			DeleteMapping::class.java.canonicalName to HttpMethod.DELETE,
+			PatchMapping::class.java.canonicalName to HttpMethod.PATCH
+		)
 	}
 
 	// No data class because we need equals with === semantic
@@ -148,10 +160,27 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun shouldIncludeMethod(method: ExecutableElement): Boolean {
 		return !MoreElements.isAnnotationPresent(method, IgnoreMapping::class.java)
-			&& MoreElements.isAnnotationPresent(method, RequestMapping::class.java)
+			&& getMappingAnnotation(method) != null
 			&& (MoreElements.isAnnotationPresent(method, ResponseBody::class.java)
 			|| MoreElements.isAnnotationPresent(method.enclosingElement, ResponseBody::class.java)
 			|| MoreElements.isAnnotationPresent(method.enclosingElement, RestController::class.java))
+	}
+
+	private fun getMappingAnnotation(method: ExecutableElement): AnnotationMirror? {
+		// RequestMapping has precedence, then try in order
+		if (MoreElements.isAnnotationPresent(method, RequestMapping::class.java)) {
+			return MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()
+		}
+
+		// Using reversed() because Spring seems to look at annotations in line increasing order but
+		// ExecutableElement.getAnnotationMirrors returns it in line descending order.
+		method.annotationMirrors.reversed().forEach { annotationMirror ->
+			val annotationTypeElement = MoreElements.asType(annotationMirror.annotationType.asElement())
+			if (mappingAnnotations.contains(annotationTypeElement.qualifiedName.toString())) {
+				return annotationMirror
+			}
+		}
+		return null
 	}
 
 	private fun generatedClassName(method: ExecutableElement): String {
@@ -349,16 +378,17 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	private fun getUrl(method: ExecutableElement): String {
-		val annotation = MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()
+		val annotation = getMappingAnnotation(method) ?: throw IllegalArgumentException("Method has no mapping annotation")
+		// Classes can only be annotated with RequestMapping so it's OK to check only for that one
 		return if (MoreElements.isAnnotationPresent(method.enclosingElement, RequestMapping::class.java)) {
 			val parentAnnotation = MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).get()
-			getRequestMappingPath(parentAnnotation) + getRequestMappingPath(annotation)
+			getMappingPath(parentAnnotation) + getMappingPath(annotation)
 		} else {
-			getRequestMappingPath(annotation)
+			getMappingPath(annotation)
 		}
 	}
 
-	private fun getRequestMappingPath(annotation: AnnotationMirror): String {
+	private fun getMappingPath(annotation: AnnotationMirror): String {
 		val values = annotation.elementValues
 		values.entries.forEach { (key, value) ->
 			val simpleName = key.simpleName.toString()
@@ -376,7 +406,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	private fun getHttpMethods(method: ExecutableElement): List<HttpMethod> {
-		val methods = getRequestMappingMethod(MoreElements.getAnnotationMirror(method, RequestMapping::class.java).get()) +
+		val methods = getRequestMappingMethod(getMappingAnnotation(method)!!) +
 			MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).transform { getRequestMappingMethod(it!!) }.or(emptyList())
 		return if (methods.isEmpty()) {
 			HttpMethod.values().toList()
@@ -385,7 +415,17 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		}
 	}
 
+	/**
+	 * @param annotation a RequestMapping/GetMapping/PostMapping/etc annotation.
+	 */
 	private fun getRequestMappingMethod(annotation: AnnotationMirror): List<HttpMethod> {
+		val annotationType = MoreElements.asType(annotation.annotationType.asElement()).qualifiedName.toString()
+		if (annotationType != RequestMapping::class.java.canonicalName) {
+			val httpMethod = mappingAnnotations[annotationType] ?: throw IllegalArgumentException("Method has no mapping annotation")
+			return listOf(httpMethod)
+		}
+
+		// Handle RequestMapping
 		val values = annotation.elementValues
 		values.entries.forEach { (key, value) ->
 			if (key.simpleName.toString() == "method") {
