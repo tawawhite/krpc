@@ -73,6 +73,8 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle flux, Deferred, etc
 // TODO : Factory, autoconfiguration
+// TODO : Read Spring MVC doc to catch special behaviors
+// TODO : Write tests :(
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
 		private val httpClient = VariableTag("httpClient")
