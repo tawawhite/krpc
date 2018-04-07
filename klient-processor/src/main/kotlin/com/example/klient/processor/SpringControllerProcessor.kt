@@ -37,7 +37,9 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.context.request.async.DeferredResult
 import java.nio.file.Paths
+import java.util.concurrent.Callable
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.Processor
 import javax.lang.model.SourceVersion
@@ -73,7 +75,18 @@ class SpringControllerProcessor : BasicAnnotationProcessor() {
 // TODO : Check invalid position of GenerateClient annotation
 // TODO : Handle flux, Deferred, etc
 // TODO : Factory, auto-configuration
-// TODO : Read Spring MVC doc to catch special behaviors
+// TODO : Catch special behaviors:
+// - https://docs.spring.io/spring/docs/5.0.5.RELEASE/spring-framework-reference/web.html#mvc-ann-responseentity
+// - https://docs.spring.io/spring/docs/5.0.5.RELEASE/spring-framework-reference/web.html#mvc-ann-async
+// - https://docs.spring.io/spring/docs/5.0.5.RELEASE/spring-framework-reference/web.html#mvc-ann-async-deferredresult
+// - https://docs.spring.io/spring/docs/5.0.5.RELEASE/spring-framework-reference/web.html#mvc-ann-async-callable
+// - https://docs.spring.io/spring/docs/5.0.5.RELEASE/spring-framework-reference/web.html#mvc-ann-async-reactive-types
+// - ListenableFuture<V>
+// - java.util.concurrent.CompletionStage<V>
+// - java.util.concurrent.CompletableFuture<V>
+// - When an @RequestParam annotation is declared as Map<String, String> or MultiValueMap<String, String> argument, the map is populated with all request parameters.
+// - When an @RequestHeader annotation is used on a Map<String, String>, MultiValueMap<String, String>, or HttpHeaders argument, the map is populated with all header values.
+// - You can specify that a method parameter is optional by setting @RequestParam's required flag to false or by declaring the argument with an java.util.Optional wrapper.
 // TODO : Write tests :(
 class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationProcessor.ProcessingStep {
 	companion object {
@@ -87,6 +100,11 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			PutMapping::class.java.canonicalName to HttpMethod.PUT,
 			DeleteMapping::class.java.canonicalName to HttpMethod.DELETE,
 			PatchMapping::class.java.canonicalName to HttpMethod.PATCH
+		)
+
+		private val returnTypesToErase = listOf(
+			DeferredResult::class.java,
+			Callable::class.java
 		)
 	}
 
@@ -376,7 +394,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			addStatement("%>throw %T(%N)", HttpCallException::class, httpResponseName)
 			addStatement("%<}")
 
-			val returnType = method.returnType.asTypeName().javaToKotlinType()
+			val returnType = methodReturnType(method)
 			if (returnType != UNIT) {
 				if (isReturnTypeNotNull(method)) {
 					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
@@ -406,6 +424,14 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return builder.build()
 	}
 
+	private fun methodReturnType(method: ExecutableElement): TypeName {
+		if (returnTypesToErase.any { MoreTypes.isTypeOf(it, method.returnType) }) {
+			val innerType = MoreTypes.asDeclared(method.returnType).typeArguments[0]
+			return innerType.asTypeName().javaToKotlinType()
+		}
+		return method.returnType.asTypeName().javaToKotlinType()
+	}
+
 	private fun addParametersAndReturnType(
 		builder: FunSpec.Builder,
 		method: ExecutableElement,
@@ -425,7 +451,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 		})
 
-		val baseReturnType = method.returnType.asTypeName().javaToKotlinType()
+		val baseReturnType = methodReturnType(method)
 		val returnType = if (!isReturnTypeNotNull(method)) baseReturnType.asNullable() else baseReturnType
 		builder.returns(returnType)
 	}
@@ -444,7 +470,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun isReturnTypeNotNull(method: ExecutableElement): Boolean {
 		val isPrimitive = method.returnType.kind.isPrimitive
-		val isUnit = method.returnType.asTypeName().javaToKotlinType() == UNIT
+		val isUnit = methodReturnType(method) == UNIT
 		return isPrimitive || isUnit || MoreElements.isAnnotationPresent(method, NotNull::class.java)
 	}
 
