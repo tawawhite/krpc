@@ -164,6 +164,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				.addFunctions(functions).build()
 			FileSpec.builder(packageName, className)
 				.addType(typeSpec)
+				.addStaticImport(Serializer::class.java.`package`.name, "fromJson")
 				.build()
 				.writeTo(generatedDirectory)
 		}
@@ -380,10 +381,10 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 						addStatement("return %N.body!!.content", httpResponseName)
 					} else {
 						addStatement(
-							"return %N.fromJson(%N.body!!.content, %T::class)",
+							"return %N.fromJson<%T>(%N.body!!.content)",
 							serializerName,
-							httpResponseName,
-							returnType
+							returnType,
+							httpResponseName
 						)
 					}
 				} else {
@@ -391,7 +392,7 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 						addStatement("return %N.body?.content", httpResponseName)
 					} else {
 						addStatement(
-							"return %N.body?.content?.let { %N.fromJson(it, %T::class) }",
+							"return %N.body?.content?.let { %N.fromJson<%T>(it) }",
 							httpResponseName,
 							serializerName,
 							returnType

@@ -41,7 +41,7 @@ class HelloController {
 	}
 
 	@RequestMapping(method = [RequestMethod.GET])
-	fun sayHello(@RequestBody body: String): String? = "Hello $body"
+	fun getAllusers(): List<User> = listOf()
 
 	@GetMapping
 	@PostMapping
@@ -52,6 +52,7 @@ class HelloController {
 }
 
 fun main(args: Array<String>) {
+	val s = HelloController::class.java.`package`
 	val funSpec = FunSpec.builder("myFunction")
 	val parameter = ParameterSpec.builder("body", Int::class).build()
 	funSpec.addParameter(parameter)
