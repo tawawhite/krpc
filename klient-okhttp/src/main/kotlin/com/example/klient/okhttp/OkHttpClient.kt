@@ -24,18 +24,18 @@ class OkHttpClient(private val okHttpClient: okhttp3.OkHttpClient) : HttpClient 
 			RequestBody.create(body.mediaType?.let { MediaType.parse(it) }, body.content)
 		}
 		return Request.Builder()
-				.url(request.url)
-				.method(request.method.name, body)
-				.headers(Headers.of(request.headers))
+			.url(request.url)
+			.method(request.method.name, body)
+			.headers(Headers.of(request.headers))
 	}
 
 	private fun mapResponse(okHttpResponse: Response, request: HttpRequest): HttpResponse {
 		val body = okHttpResponse.body()?.let { HttpRequestBody(it.string(), it.contentType().toString()) }
 		return HttpResponse(
-				request = request,
-				status = HttpStatus(okHttpResponse.code(), okHttpResponse.message()),
-				body = body,
-				headers = okHttpResponse.headers().toMultimap()
+			request = request,
+			status = HttpStatus(okHttpResponse.code(), okHttpResponse.message()),
+			body = body,
+			headers = okHttpResponse.headers().toMultimap()
 		)
 	}
 }

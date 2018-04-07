@@ -20,10 +20,12 @@ class Application
 class HelloController {
 
 	@RequestMapping("/{pathVariable}", method = [RequestMethod.POST])
-	fun echo(@RequestBody body: String,
-			 @RequestParam requestParam: Int?,
-			 @RequestHeader header: String?,
-			 @PathVariable pathVariable: Long): String {
+	fun echo(
+		@RequestBody body: String,
+		@RequestParam requestParam: Int?,
+		@RequestHeader header: String?,
+		@PathVariable pathVariable: Long
+	): String {
 		return """I received:
 			|body: $body
 			|requestParam: $requestParam

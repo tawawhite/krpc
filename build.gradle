@@ -10,14 +10,15 @@ buildscript {
 	}
 }
 
-configure(subprojects.findAll {it.name != 'klient-core'}) {
+configure(subprojects.findAll { it.name != 'klient-core' }) {
 	apply plugin: 'kotlin'
 }
+
 project(':klient-core') {
 	apply plugin: 'kotlin-platform-common'
 }
 
-configure(subprojects.findAll {it.name != 'processor-example'}) {
+configure(subprojects.findAll { it.name != 'processor-example' }) {
 	apply plugin: 'maven-publish'
 
 	publishing {

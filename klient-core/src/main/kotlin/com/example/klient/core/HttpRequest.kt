@@ -11,10 +11,14 @@ enum class HttpMethod {
 	TRACE
 }
 
-data class HttpRequestBody(val content: String,
-						   val mediaType: String? = null)
+data class HttpRequestBody(
+	val content: String,
+	val mediaType: String? = null
+)
 
-data class HttpRequest(val url: String,
-					   val method: HttpMethod,
-					   val body: HttpRequestBody? = null,
-					   val headers: Map<String, String> = emptyMap())
+data class HttpRequest(
+	val url: String,
+	val method: HttpMethod,
+	val body: HttpRequestBody? = null,
+	val headers: Map<String, String> = emptyMap()
+)

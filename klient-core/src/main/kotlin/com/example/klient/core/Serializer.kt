@@ -1,4 +1,5 @@
 package com.example.klient.core
+
 import kotlin.reflect.KClass
 
 interface Serializer {

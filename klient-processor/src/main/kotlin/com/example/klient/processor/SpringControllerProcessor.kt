@@ -93,8 +93,10 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	// No data class because we need equals with === semantic
 	private class VariableTag(val name: String)
 
-	private val generatedDirectory = Paths.get(env.options[SpringControllerProcessor.outputDirOption]
-		?: env.options["kapt.kotlin.generated"])
+	private val generatedDirectory = Paths.get(
+		env.options[SpringControllerProcessor.outputDirOption]
+			?: env.options["kapt.kotlin.generated"]
+	)
 	private val functionsByClass = LinkedListMultimap.create<String, FunSpec>()
 	private val nameAllocatorByClass = hashMapOf<String, NameAllocator>()
 	override fun annotations(): Set<Class<out Annotation>> {
@@ -106,7 +108,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 		val annotatedClasses = ElementFilter.typesIn(elements[GenerateClient::class.java])
 		val annotatedMethods = ElementFilter.methodsIn(elements[GenerateClient::class.java])
-		val methodsToConsider = annotatedMethods + annotatedClasses.flatMap { ElementFilter.methodsIn(it.enclosedElements) }
+		val methodsToConsider =
+			annotatedMethods + annotatedClasses.flatMap { ElementFilter.methodsIn(it.enclosedElements) }
 		methodsToConsider.toSet().forEach { method ->
 			if (shouldIncludeMethod(method)) {
 				val className = generatedClassName(method)
@@ -136,20 +139,28 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			val serializerName = nameAllocator.get(serializer)
 			val baseUrlName = nameAllocator.get(baseUrl)
 			val typeSpec = TypeSpec.classBuilder(className)
-				.primaryConstructor(FunSpec.constructorBuilder()
-					.addParameter(httpClientName, HttpClient::class)
-					.addParameter(serializerName, Serializer::class)
-					.addParameter(baseUrlName, String::class)
-					.build())
-				.addProperty(PropertySpec.builder(httpClientName, HttpClient::class, KModifier.PRIVATE)
-					.initializer(httpClientName)
-					.build())
-				.addProperty(PropertySpec.builder(serializerName, Serializer::class, KModifier.PRIVATE)
-					.initializer(serializerName)
-					.build())
-				.addProperty(PropertySpec.builder(baseUrlName, String::class, KModifier.PRIVATE)
-					.initializer(baseUrlName)
-					.build())
+				.primaryConstructor(
+					FunSpec.constructorBuilder()
+						.addParameter(httpClientName, HttpClient::class)
+						.addParameter(serializerName, Serializer::class)
+						.addParameter(baseUrlName, String::class)
+						.build()
+				)
+				.addProperty(
+					PropertySpec.builder(httpClientName, HttpClient::class, KModifier.PRIVATE)
+						.initializer(httpClientName)
+						.build()
+				)
+				.addProperty(
+					PropertySpec.builder(serializerName, Serializer::class, KModifier.PRIVATE)
+						.initializer(serializerName)
+						.build()
+				)
+				.addProperty(
+					PropertySpec.builder(baseUrlName, String::class, KModifier.PRIVATE)
+						.initializer(baseUrlName)
+						.build()
+				)
 				.addFunctions(functions).build()
 			FileSpec.builder(packageName, className)
 				.addType(typeSpec)
@@ -217,12 +228,22 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			builder.addStatement("return %N(%T.%L)", method.simpleName.toString(), HttpMethod::class, httpMethod)
 		} else {
 			val parameters = method.parameters.joinToString(", ") { it.simpleName.toString() }
-			builder.addStatement("return %N(%T.%L, %N)", method.simpleName.toString(), HttpMethod::class, httpMethod, parameters)
+			builder.addStatement(
+				"return %N(%T.%L, %N)",
+				method.simpleName.toString(),
+				HttpMethod::class,
+				httpMethod,
+				parameters
+			)
 		}
 		return builder.build()
 	}
 
-	private fun getMainFunction(method: ExecutableElement, httpMethod: HttpMethod?, nameAllocator: NameAllocator): FunSpec {
+	private fun getMainFunction(
+		method: ExecutableElement,
+		httpMethod: HttpMethod?,
+		nameAllocator: NameAllocator
+	): FunSpec {
 		val builder = FunSpec.builder(method.simpleName.toString()).addModifiers(KModifier.SUSPEND)
 		with(builder) {
 			// Allocated names
@@ -256,9 +277,20 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 				if (MoreTypes.isTypeOf(String::class.java, body.asType())) {
 					addStatement("val %N = %N", bodyContentName, nameAllocator.get(body))
 				} else {
-					addStatement("val %N = %N.toJson(%N)", bodyContentName, nameAllocator.get(serializer), nameAllocator.get(body))
+					addStatement(
+						"val %N = %N.toJson(%N)",
+						bodyContentName,
+						nameAllocator.get(serializer),
+						nameAllocator.get(body)
+					)
 				}
-				addStatement("val %N = %T(%N, %S)", bodyName, HttpRequestBody::class, bodyContentName, "application/json")
+				addStatement(
+					"val %N = %T(%N, %S)",
+					bodyName,
+					HttpRequestBody::class,
+					bodyContentName,
+					"application/json"
+				)
 			}
 
 			// Headers
@@ -276,7 +308,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 
 			// Path variables
-			val pathVariables = method.parameters.filter { MoreElements.isAnnotationPresent(it, PathVariable::class.java) }
+			val pathVariables =
+				method.parameters.filter { MoreElements.isAnnotationPresent(it, PathVariable::class.java) }
 			if (pathVariables.isNotEmpty()) {
 				createStringMap(builder, pathVariablesName, pathVariables, PathVariable::class.java, nameAllocator)
 			}
@@ -298,12 +331,24 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 
 			if (pathVariables.isNotEmpty()) {
-				addStatement("%N = %N.toList().fold(%N, { current, (variable, value) -> current.replace(\"{\$variable}\", value) } )", urlName, pathVariablesName, urlName)
+				addStatement(
+					"%N = %N.toList().fold(%N, { current, (variable, value) -> current.replace(\"{\$variable}\", value) } )",
+					urlName,
+					pathVariablesName,
+					urlName
+				)
 			}
 
 			mapOf<String, String>().toList().joinToString("") { "${it.first}=${it.second}" }
 			if (params.isNotEmpty()) {
-				addStatement("%N += %S + %N.toList().joinToString(%S) { %S }", urlName, "?", paramsName, "&", "\${it.first}=\${it.second}")
+				addStatement(
+					"%N += %S + %N.toList().joinToString(%S) { %S }",
+					urlName,
+					"?",
+					paramsName,
+					"&",
+					"\${it.first}=\${it.second}"
+				)
 			}
 
 			// Method
@@ -312,7 +357,15 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			}
 
 			// HttpRequest
-			addStatement("val %N = %T(%N, %N, %N, %N)", httpRequestName, HttpRequest::class, urlName, httpMethodName, bodyName, headersName)
+			addStatement(
+				"val %N = %T(%N, %N, %N, %N)",
+				httpRequestName,
+				HttpRequest::class,
+				urlName,
+				httpMethodName,
+				bodyName,
+				headersName
+			)
 
 			// HttpResponse
 			addStatement("val %N = %N.send(%N)", httpResponseName, httpClientName, httpRequestName)
@@ -326,13 +379,23 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
 						addStatement("return %N.body!!.content", httpResponseName)
 					} else {
-						addStatement("return %N.fromJson(%N.body!!.content, %T::class)", serializerName, httpResponseName, returnType)
+						addStatement(
+							"return %N.fromJson(%N.body!!.content, %T::class)",
+							serializerName,
+							httpResponseName,
+							returnType
+						)
 					}
 				} else {
 					if (MoreTypes.isTypeOf(String::class.java, method.returnType)) {
 						addStatement("return %N.body?.content", httpResponseName)
 					} else {
-						addStatement("return %N.body?.content?.let { %N.fromJson(it, %T::class) }", httpResponseName, serializerName, returnType)
+						addStatement(
+							"return %N.body?.content?.let { %N.fromJson(it, %T::class) }",
+							httpResponseName,
+							serializerName,
+							returnType
+						)
 					}
 				}
 			}
@@ -340,7 +403,11 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return builder.build()
 	}
 
-	private fun addParametersAndReturnType(builder: FunSpec.Builder, method: ExecutableElement, nameAllocator: NameAllocator) {
+	private fun addParametersAndReturnType(
+		builder: FunSpec.Builder,
+		method: ExecutableElement,
+		nameAllocator: NameAllocator
+	) {
 		builder.addParameters(method.parameters.mapNotNull { element ->
 			if (shouldIncludeParam(element)) {
 				nameAllocator.newName(element.simpleName.toString(), element)
@@ -379,10 +446,12 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	}
 
 	private fun getUrl(method: ExecutableElement): String {
-		val annotation = getMappingAnnotation(method) ?: throw IllegalArgumentException("Method has no mapping annotation")
+		val annotation =
+			getMappingAnnotation(method) ?: throw IllegalArgumentException("Method has no mapping annotation")
 		// Classes can only be annotated with RequestMapping so it's OK to check only for that one
 		return if (MoreElements.isAnnotationPresent(method.enclosingElement, RequestMapping::class.java)) {
-			val parentAnnotation = MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).get()
+			val parentAnnotation =
+				MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).get()
 			getMappingPath(parentAnnotation) + getMappingPath(annotation)
 		} else {
 			getMappingPath(annotation)
@@ -408,7 +477,10 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 	private fun getHttpMethods(method: ExecutableElement): List<HttpMethod> {
 		val methods = getRequestMappingMethod(getMappingAnnotation(method)!!) +
-			MoreElements.getAnnotationMirror(method.enclosingElement, RequestMapping::class.java).transform { getRequestMappingMethod(it!!) }.or(emptyList())
+			MoreElements.getAnnotationMirror(
+				method.enclosingElement,
+				RequestMapping::class.java
+			).transform { getRequestMappingMethod(it!!) }.or(emptyList())
 		return if (methods.isEmpty()) {
 			HttpMethod.values().toList()
 		} else {
@@ -422,7 +494,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 	private fun getRequestMappingMethod(annotation: AnnotationMirror): List<HttpMethod> {
 		val annotationType = MoreElements.asType(annotation.annotationType.asElement()).qualifiedName.toString()
 		if (annotationType != RequestMapping::class.java.canonicalName) {
-			val httpMethod = mappingAnnotations[annotationType] ?: throw IllegalArgumentException("Method has no mapping annotation")
+			val httpMethod =
+				mappingAnnotations[annotationType] ?: throw IllegalArgumentException("Method has no mapping annotation")
 			return listOf(httpMethod)
 		}
 
@@ -438,7 +511,13 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 		return emptyList()
 	}
 
-	private fun createStringMap(builder: FunSpec.Builder, mapName: String, elements: List<VariableElement>, annotation: Class<out Annotation>, nameAllocator: NameAllocator) {
+	private fun createStringMap(
+		builder: FunSpec.Builder,
+		mapName: String,
+		elements: List<VariableElement>,
+		annotation: Class<out Annotation>,
+		nameAllocator: NameAllocator
+	) {
 		val hasNullable = elements.any { !isNotNull(it) }
 		if (hasNullable) {
 			builder.addStatement("val %N = listOf<%T<%T, %T?>>(", mapName, Pair::class, String::class, String::class)
@@ -453,9 +532,19 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 			if (MoreTypes.isTypeOf(String::class.java, variable.asType())) {
 				builder.addStatement("$prefix%S to %N$suffix", paramName, variableName)
 			} else if (isNotNull(variable)) {
-				builder.addStatement("$prefix%S to %N.toJson(%N)$suffix", paramName, nameAllocator.get(serializer), variableName)
+				builder.addStatement(
+					"$prefix%S to %N.toJson(%N)$suffix",
+					paramName,
+					nameAllocator.get(serializer),
+					variableName
+				)
 			} else {
-				builder.addStatement("$prefix%S to %N.let { %N.toJson(it) }$suffix", paramName, variableName, nameAllocator.get(serializer))
+				builder.addStatement(
+					"$prefix%S to %N.let { %N.toJson(it) }$suffix",
+					paramName,
+					variableName,
+					nameAllocator.get(serializer)
+				)
 			}
 		}
 
