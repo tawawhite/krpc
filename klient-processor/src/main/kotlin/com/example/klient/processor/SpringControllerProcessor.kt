@@ -317,6 +317,8 @@ class ProcessingStep(private val env: ProcessingEnvironment) : BasicAnnotationPr
 
 			// URL
 			val url = getUrl(method)
+				// Remove pattern matching in path variables
+				.replace(Regex("""\{([^:}]+)(:[^}]+)?}""")) { matchResult -> "{${matchResult.groupValues[1]}}" }
 			if (params.isEmpty() && pathVariables.isEmpty()) {
 				if (url != "") {
 					addStatement("val %N = %N + %S", urlName, baseUrlName, url)
