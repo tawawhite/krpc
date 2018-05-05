@@ -1,8 +1,8 @@
 apply plugin: 'kotlin-kapt'
 
 dependencies {
-	compileOnly project(':klient-processor')
-	kapt project(':klient-processor')
+	compileOnly project(':krpc-processor')
+	kapt project(':krpc-processor')
 
 	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
 	compile 'org.jetbrains.kotlin:kotlin-reflect'

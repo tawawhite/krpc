@@ -10,11 +10,11 @@ buildscript {
 	}
 }
 
-configure(subprojects.findAll { it.name != 'klient-core' }) {
+configure(subprojects.findAll { it.name != 'krpc-core' }) {
 	apply plugin: 'kotlin'
 }
 
-project(':klient-core') {
+project(':krpc-core') {
 	apply plugin: 'kotlin-platform-common'
 }
 

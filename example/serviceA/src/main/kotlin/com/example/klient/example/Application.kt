@@ -1,6 +1,6 @@
-package com.example.klient.example
+package com.example.krpc.example
 
-import com.example.klient.processor.GenerateClient
+import com.example.krpc.processor.GenerateClient
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.web.bind.annotation.PathVariable

@@ -6,8 +6,8 @@ apply plugin: 'io.spring.dependency-management'
 dependencies {
 	compile project(':serviceA-shared')
 
-	compileOnly 'com.example:klient-processor:0.1.0-SNAPSHOT'
-	kapt 'com.example:klient-processor:0.1.0-SNAPSHOT'
+	compileOnly 'com.example:krpc-processor:0.1.0-SNAPSHOT'
+	kapt 'com.example:krpc-processor:0.1.0-SNAPSHOT'
 
 	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
 	compile 'org.jetbrains.kotlin:kotlin-reflect'
@@ -18,7 +18,7 @@ dependencies {
 def clientProject = project(':serviceA-client')
 kapt {
 	arguments {
-		arg("klient.outputDir", clientProject.projectDir.toPath().resolve("src/main/kotlin"))
+		arg("krpc.outputDir", clientProject.projectDir.toPath().resolve("src/main/kotlin"))
 	}
 }
 clientProject.compileJava.dependsOn(compileJava)

@@ -1,0 +1,16 @@
+apply plugin: 'kotlin-kapt'
+apply plugin: 'kotlin-platform-jvm'
+
+dependencies {
+	expectedBy project(":krpc-core")
+
+	compile 'com.google.auto:auto-common:0.8'
+	compileOnly 'com.google.auto.service:auto-service:1.0-rc4'
+	kapt 'com.google.auto.service:auto-service:1.0-rc4'
+
+	compile 'com.squareup:kotlinpoet:0.7.0'
+	compile 'org.jetbrains.kotlin:kotlin-stdlib'
+	compile 'org.jetbrains.kotlin:kotlin-reflect'
+	compile 'org.springframework:spring-web:5.0.4.RELEASE'
+	compile 'com.google.code.findbugs:jsr305:3.0.2'
+}

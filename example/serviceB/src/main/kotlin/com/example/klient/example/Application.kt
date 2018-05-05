@@ -1,7 +1,7 @@
-package com.example.klient.example
+package com.example.krpc.example
 
-import com.example.klient.gson.GsonSerializer
-import com.example.klient.okhttp.OkHttpClient
+import com.example.krpc.gson.GsonSerializer
+import com.example.krpc.okhttp.OkHttpClient
 import com.google.gson.Gson
 import kotlinx.coroutines.experimental.runBlocking
 import org.springframework.boot.CommandLineRunner

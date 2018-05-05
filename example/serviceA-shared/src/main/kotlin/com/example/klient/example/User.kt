@@ -1,4 +1,4 @@
-package com.example.klient.example
+package com.example.krpc.example
 
 class User(
 	var firstName: String? = null,
