@@ -2,8 +2,8 @@ package com.example.klient.okhttp
 
 import com.example.klient.core.HttpClient
 import com.example.klient.core.HttpRequest
-import com.example.klient.core.HttpRequestBody
 import com.example.klient.core.HttpResponse
+import com.example.klient.core.HttpResponseBody
 import com.example.klient.core.HttpStatus
 import okhttp3.Headers
 import okhttp3.MediaType
@@ -30,7 +30,7 @@ class OkHttpClient(private val okHttpClient: okhttp3.OkHttpClient) : HttpClient 
 	}
 
 	private fun mapResponse(okHttpResponse: Response, request: HttpRequest): HttpResponse {
-		val body = okHttpResponse.body()?.let { HttpRequestBody(it.string(), it.contentType().toString()) }
+		val body = okHttpResponse.body()?.let { HttpResponseBody(it.string(), it.contentType().toString()) }
 		return HttpResponse(
 			request = request,
 			status = HttpStatus(okHttpResponse.code(), okHttpResponse.message()),

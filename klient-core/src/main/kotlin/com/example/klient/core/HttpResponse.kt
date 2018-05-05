@@ -19,6 +19,6 @@ data class HttpResponseBody(
 data class HttpResponse(
 	val request: HttpRequest,
 	val status: HttpStatus,
-	val body: HttpRequestBody? = null,
+	val body: HttpResponseBody? = null,
 	val headers: Map<String, List<String>> = emptyMap()
 )
