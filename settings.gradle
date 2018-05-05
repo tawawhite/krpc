@@ -1,5 +1,5 @@
 include 'krpc-core'
-include 'krpc-gson'
+include 'krpc-ktor'
 include 'krpc-okhttp'
 include 'krpc-processor'
 include 'processor-example'

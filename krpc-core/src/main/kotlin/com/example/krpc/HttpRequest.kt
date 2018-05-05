@@ -1,4 +1,4 @@
-package com.example.krpc.core
+package com.example.krpc
 
 enum class HttpMethod {
 	DELETE,

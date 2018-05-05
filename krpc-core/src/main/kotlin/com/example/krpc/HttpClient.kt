@@ -1,4 +1,4 @@
-package com.example.krpc.core
+package com.example.krpc
 
 interface HttpClient {
 

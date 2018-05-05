@@ -1,10 +1,10 @@
 package com.example.krpc.okhttp
 
-import com.example.krpc.core.HttpClient
-import com.example.krpc.core.HttpRequest
-import com.example.krpc.core.HttpResponse
-import com.example.krpc.core.HttpResponseBody
-import com.example.krpc.core.HttpStatus
+import com.example.krpc.HttpClient
+import com.example.krpc.HttpRequest
+import com.example.krpc.HttpResponse
+import com.example.krpc.HttpResponseBody
+import com.example.krpc.HttpStatus
 import okhttp3.Headers
 import okhttp3.MediaType
 import okhttp3.Request
@@ -30,7 +30,12 @@ class OkHttpClient(private val okHttpClient: okhttp3.OkHttpClient) : HttpClient 
 	}
 
 	private fun mapResponse(okHttpResponse: Response, request: HttpRequest): HttpResponse {
-		val body = okHttpResponse.body()?.let { HttpResponseBody(it.string(), it.contentType().toString()) }
+		val body = okHttpResponse.body()?.let {
+			HttpResponseBody(
+				it.string(),
+				it.contentType().toString()
+			)
+		}
 		return HttpResponse(
 			request = request,
 			status = HttpStatus(okHttpResponse.code(), okHttpResponse.message()),

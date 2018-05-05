@@ -1,10 +1,10 @@
-package com.example.krpc.core
+package com.example.krpc
 
 data class HttpStatus(
 	val code: Int,
 	val message: String
 ) {
-	companion object {
+	private companion object {
 		private val successfulCodeRange = 200 until 300
 	}
 
