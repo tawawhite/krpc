@@ -1,7 +1,0 @@
-apply plugin: 'kotlin-platform-jvm'
-
-dependencies {
-	expectedBy project(':krpc-core')
-	compile 'org.jetbrains.kotlin:kotlin-stdlib'
-	compile 'com.google.code.gson:gson:2.8.2'
-}

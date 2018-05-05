@@ -4,7 +4,5 @@ dependencies {
 	compileOnly project(':krpc-processor')
 	kapt project(':krpc-processor')
 
-	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
-	compile 'org.jetbrains.kotlin:kotlin-reflect'
-	compile 'com.squareup:kotlinpoet:0.7.0'
+	compile 'org.jetbrains.kotlin:kotlin-stdlib'
 }

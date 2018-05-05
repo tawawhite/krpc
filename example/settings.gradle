@@ -1,4 +1,0 @@
-include 'serviceA'
-include 'serviceA-client'
-include 'serviceA-shared'
-include 'serviceB'

@@ -1,5 +1,0 @@
-dependencies {
-	compile project(':serviceA-shared') // DTOs
-	compile 'com.example:krpc-okhttp:0.1.0-SNAPSHOT'
-	compile 'com.example:krpc-gson:0.1.0-SNAPSHOT'
-}
