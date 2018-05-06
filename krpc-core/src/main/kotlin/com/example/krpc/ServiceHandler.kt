@@ -16,3 +16,16 @@ interface RpcHandler<I : Any, O : Any> {
 
 	suspend fun run(request: I): O
 }
+
+fun <I : Any, O : Any> rpcHandler(
+	requestLoader: KSerialLoader<I>,
+	responseSaver: KSerialSaver<O>,
+	run: suspend (I) -> O
+): RpcHandler<I, O> {
+	return object : RpcHandler<I, O> {
+		override val requestLoader: KSerialLoader<I> = requestLoader
+		override val responseSaver: KSerialSaver<O> = responseSaver
+
+		override suspend fun run(request: I): O = run(request)
+	}
+}

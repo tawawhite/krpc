@@ -1,6 +1,6 @@
 buildscript {
 	ext {
-		kotlinVersion = '1.2.40'
+		kotlinVersion = '1.2.20'
 		ktorVersion = '0.9.2'
 		serializationVersion = '0.4.2'
 	}

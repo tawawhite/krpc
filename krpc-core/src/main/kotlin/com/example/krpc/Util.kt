@@ -4,8 +4,10 @@ import kotlinx.serialization.KSerialLoader
 import kotlinx.serialization.KSerialSaver
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.protobuf.ProtoBuf
+import kotlinx.serialization.stringFromUtf8Bytes
+import kotlinx.serialization.toUtf8Bytes
 
-suspend fun <I : Any, O : Any> makeCall(
+suspend fun <I : Any, O : Any> makeRpc(
 	httpClient: HttpClient,
 	url: String,
 	serialization: Serialization,
@@ -19,7 +21,7 @@ suspend fun <I : Any, O : Any> makeCall(
 			Serialization.JSON.mediaType
 		)
 		Serialization.PROTOBUF -> HttpRequestBody(
-			encodeBase64(ProtoBuf.dump(requestSaver, request)),
+			stringFromUtf8Bytes(ProtoBuf.dump(requestSaver, request)),
 			Serialization.PROTOBUF.mediaType
 		)
 	}
@@ -34,18 +36,10 @@ suspend fun <I : Any, O : Any> makeCall(
 		val responseBody = httpResponse.body!!.content
 		return when (serialization) {
 			Serialization.JSON -> JSON.parse(responseLoader, responseBody)
-			Serialization.PROTOBUF -> ProtoBuf.load(responseLoader, decodeBase64(responseBody))
+			Serialization.PROTOBUF -> ProtoBuf.load(responseLoader, responseBody.toUtf8Bytes())
 		}
 	} else {
 		// TODO parse FailureException
 		throw Exception()
 	}
-}
-
-fun encodeBase64(bytes: ByteArray): String {
-	TODO()
-}
-
-fun decodeBase64(string: String): ByteArray {
-	TODO()
 }

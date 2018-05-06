@@ -1,29 +1,33 @@
 package com.example.krpc.example
 
-import com.example.krpc.HttpClient
-import com.example.krpc.RpcHandler
 import com.example.krpc.Serialization
-import com.example.krpc.ServiceHandler
 import com.example.krpc.ktor.KtorServer
-import com.example.krpc.makeCall
 import com.example.krpc.okhttp.OkHttpClient
+import com.example.krpc.processor.Service
 import io.ktor.server.netty.Netty
 import kotlinx.coroutines.experimental.runBlocking
+import kotlinx.serialization.SerialId
 import kotlinx.serialization.Serializable
 
+// @SerialId is not necessary if not using protobuf serialization
 @Serializable
 data class User(
-	val id: Int,
-	val firstName: String,
-	val lastName: String
+	@SerialId(1) val id: Int,
+	@SerialId(2) val firstName: String,
+	@SerialId(3) val lastName: String
 )
 
 @Serializable
-data class GetRequest(val id: Int)
+data class GetRequest(
+	@SerialId(1) val id: Int
+)
 
 @Serializable
-data class GetResponse(val user: User)
+data class GetResponse(
+	@SerialId(1) val user: User
+)
 
+@Service
 interface UserService {
 	companion object;
 
@@ -36,48 +40,23 @@ object UserServiceImpl : UserService {
 	}
 }
 
-fun UserService.Companion.create(
-	httpClient: HttpClient,
-	baseUrl: String,
-	serialization: Serialization = Serialization.JSON
-): UserService {
-	return object : UserService {
-		override suspend fun getUser(request: GetRequest): GetResponse {
-			val url = "$baseUrl/UserService/getUser"
-			return makeCall(httpClient, url, serialization, request, GetRequest.serializer(), GetResponse.serializer())
-		}
+private fun startServer(port: Int) {
+	KtorServer(Netty, port = port).run {
+		bindService(UserService.handler(UserServiceImpl))
+		start()
 	}
 }
 
-// TODO no two function can have the same name
-// TODO handle number of arguments = 0?
-fun UserService.Companion.handler(implementation: UserService): ServiceHandler {
-	return object : ServiceHandler {
-		override val serviceName: String = "UserService"
-
-		override fun rpcHandler(rpc: String): RpcHandler<*, *>? {
-			return when (rpc) {
-				"getUser" -> object : RpcHandler<GetRequest, GetResponse> {
-					override val requestLoader = GetRequest.serializer()
-					override val responseSaver = GetResponse.serializer()
-					override suspend fun run(request: GetRequest): GetResponse = implementation.getUser(request)
-				}
-				else -> null
-			}
-		}
+private fun makeRequest(port: Int) {
+	val httpClient = OkHttpClient(okhttp3.OkHttpClient())
+	val userService = UserService.create(httpClient, "http://127.0.0.1:$port", Serialization.PROTOBUF)
+	runBlocking {
+		println(userService.getUser(GetRequest(42)))
 	}
 }
 
 fun main(args: Array<String>) {
 	val port = 8080
-	KtorServer(Netty, port = port).run {
-		bindService(UserService.handler(UserServiceImpl))
-		start()
-	}
-
-	val httpClient = OkHttpClient(okhttp3.OkHttpClient())
-	val userService = UserService.create(httpClient, "http://127.0.0.1:$port")
-	runBlocking {
-		println(userService.getUser(GetRequest(42)))
-	}
+	startServer(port)
+	makeRequest(port)
 }

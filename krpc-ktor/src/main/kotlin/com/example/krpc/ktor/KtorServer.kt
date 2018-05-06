@@ -20,7 +20,8 @@ import io.ktor.server.engine.embeddedServer
 import kotlinx.coroutines.experimental.io.jvm.javaio.toInputStream
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.protobuf.ProtoBuf
-import java.util.Base64
+import kotlinx.serialization.stringFromUtf8Bytes
+import kotlinx.serialization.toUtf8Bytes
 import java.util.concurrent.TimeUnit
 
 class KtorServer<TEngine : ApplicationEngine, TConfiguration : ApplicationEngine.Configuration>(
@@ -91,7 +92,7 @@ class KtorServer<TEngine : ApplicationEngine, TConfiguration : ApplicationEngine
 			Serialization.JSON.mediaType -> JSON.parse(handler.requestLoader, requestBody)
 			Serialization.PROTOBUF.mediaType -> ProtoBuf.load(
 				handler.requestLoader,
-				Base64.getDecoder().decode(requestBody)
+				requestBody.toUtf8Bytes()
 			)
 			else -> {
 				call.respond(
@@ -109,7 +110,7 @@ class KtorServer<TEngine : ApplicationEngine, TConfiguration : ApplicationEngine
 				call.respondText(json, ContentType.Application.Json)
 			}
 			Serialization.PROTOBUF.mediaType -> {
-				val content = Base64.getEncoder().encodeToString(ProtoBuf.dump(handler.responseSaver, response))
+				val content = stringFromUtf8Bytes(ProtoBuf.dump(handler.responseSaver, response))
 				call.respondText(content, ContentType.Application.OctetStream)
 			}
 		}
