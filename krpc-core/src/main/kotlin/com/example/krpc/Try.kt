@@ -44,7 +44,7 @@ data class Success<out T>(val value: T) : Try<T>()
 data class Failure(val error: Error, val message: String? = null) : Try<Nothing>()
 
 /** Throwing this exception in a Try {} block will return [failure] as the result. */
-class FailureException(val failure: Failure) : Exception() {
+data class FailureException(val failure: Failure) : Exception() {
 	constructor(error: Error, message: String? = null) : this(Failure(error, message))
 }
 

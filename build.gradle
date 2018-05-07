@@ -2,6 +2,7 @@ buildscript {
 	ext {
 		kotlinVersion = '1.2.20'
 		ktorVersion = '0.9.2'
+		coroutinesVersion = '0.22.5'
 		serializationVersion = '0.4.2'
 	}
 	repositories {
@@ -14,12 +15,32 @@ buildscript {
 	}
 }
 
-configure(subprojects.findAll { it.name != 'krpc-core' }) {
-	apply plugin: 'kotlin'
-}
-
 project(':krpc-core') {
 	apply plugin: 'kotlin-platform-common'
+}
+
+project(':krpc-js') {
+	apply plugin: 'kotlin-platform-js'
+}
+
+project(':krpc-ktor') {
+	apply plugin: 'kotlin-platform-jvm'
+}
+
+project(':krpc-okhttp') {
+	apply plugin: 'kotlin-platform-jvm'
+}
+
+project(':krpc-processor') {
+	apply plugin: 'kotlin-platform-jvm'
+}
+
+project(':example-service') {
+	apply plugin: 'kotlin-platform-common'
+}
+
+project(':example-frontend') {
+	apply plugin: 'kotlin-platform-js'
 }
 
 configure(subprojects.findAll { it.name != 'processor-example' }) {

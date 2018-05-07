@@ -1,5 +1,7 @@
 include 'krpc-core'
+include 'krpc-js'
 include 'krpc-ktor'
 include 'krpc-okhttp'
 include 'krpc-processor'
-include 'processor-example'
+include 'example-service'
+include 'example-frontend'
