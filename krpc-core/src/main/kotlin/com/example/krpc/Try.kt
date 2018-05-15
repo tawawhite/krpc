@@ -2,28 +2,17 @@ package com.example.krpc
 
 sealed class Try<out T> {
 	companion object {
-		inline operator fun <T> invoke(f: TryBuilder.() -> T): Try<T> {
+		inline operator fun <T> invoke(
+			errorMapper: ErrorMapper = DefaultErrorMapper,
+			f: TryBuilder.() -> T
+		): Try<T> {
 			return try {
 				Success(TryBuilder.f())
 			} catch (e: FailureException) {
 				e.failure
 			} catch (t: Throwable) {
-				Failure(mapError(t), t.message)
+				Failure(errorMapper.map(t), t.message)
 			}
-		}
-
-		/**
-		 * Map some exceptions from [kotlin.Exception] to an [Error].
-		 */
-		@PublishedApi
-		internal fun mapError(t: Throwable): Error = when(t) {
-			is IllegalArgumentException, is UnsupportedOperationException -> Error.INVALID_ARGUMENT
-			is IllegalStateException, is NullPointerException -> Error.INTERNAL
-			is IndexOutOfBoundsException -> Error.OUT_OF_RANGE
-			is NotImplementedError -> Error.UNIMPLEMENTED
-			is AssertionError -> Error.FAILED_PRECONDITION
-			is NoSuchElementException -> Error.NOT_FOUND
-			else -> Error.UNKNOWN
 		}
 	}
 
@@ -42,11 +31,6 @@ sealed class Try<out T> {
 data class Success<out T>(val value: T) : Try<T>()
 
 data class Failure(val error: Error, val message: String? = null) : Try<Nothing>()
-
-/** Throwing this exception in a Try {} block will return [failure] as the result. */
-class FailureException(val failure: Failure) : Exception() {
-	constructor(error: Error, message: String? = null) : this(Failure(error, message))
-}
 
 // Inspired from https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
 enum class Error {
@@ -68,27 +52,49 @@ enum class Error {
 	DATA_LOSS,
 }
 
-inline fun <A, B> Try<A>.fold(ft: (Error, String?) -> B, f: (A) -> B): Try<B> = when(this) {
+/** Throwing a [FailureException] in a Try {} block will return [failure] as the result. */
+class FailureException(val failure: Failure) : Exception() {
+	constructor(error: Error, message: String? = null) : this(Failure(error, message))
+}
+
+interface ErrorMapper {
+	fun map(t: Throwable): Error
+}
+
+object DefaultErrorMapper : ErrorMapper {
+	override fun map(t: Throwable): Error = when (t) {
+		is IllegalArgumentException -> Error.INVALID_ARGUMENT
+		is IllegalStateException, is NullPointerException -> Error.INTERNAL
+		is IndexOutOfBoundsException -> Error.OUT_OF_RANGE
+		is UnsupportedOperationException, is NotImplementedError -> Error.UNIMPLEMENTED
+		is AssertionError -> Error.FAILED_PRECONDITION
+		is NoSuchElementException -> Error.NOT_FOUND
+		else -> Error.UNKNOWN
+	}
+}
+
+// Some useful functions
+inline fun <A, B> Try<A>.fold(ft: (Error, String?) -> B, f: (A) -> B): Try<B> = when (this) {
 	is Success -> Try { f(value) }
 	is Failure -> Try { ft(error, message) }
 }
 
-inline fun <A, B> Try<A>.map(f: (A) -> B): Try<B> = when(this) {
+inline fun <A, B> Try<A>.map(f: (A) -> B): Try<B> = when (this) {
 	is Success -> Try { f(value) }
 	is Failure -> this
 }
 
-inline fun <A, B> Try<A>.flatMap(f: (A) -> Try<B>): Try<B> = when(this) {
+inline fun <A, B> Try<A>.flatMap(f: (A) -> Try<B>): Try<B> = when (this) {
 	is Success -> f(value)
 	is Failure -> this
 }
 
-inline fun <A> Try<A>.recover(f: (Error, String?) -> A): Try<A> = when(this) {
+inline fun <A> Try<A>.recover(f: (Error, String?) -> A): Try<A> = when (this) {
 	is Success -> this
 	is Failure -> Try { f(error, message) }
 }
 
-inline fun <A> Try<A>.recoverWith(f: (Error, String?) -> Try<A>): Try<A> = when(this) {
+inline fun <A> Try<A>.recoverWith(f: (Error, String?) -> Try<A>): Try<A> = when (this) {
 	is Success -> this
 	is Failure -> f(error, message)
 }
