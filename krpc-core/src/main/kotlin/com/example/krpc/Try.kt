@@ -4,10 +4,10 @@ sealed class Try<out T> {
 	companion object {
 		inline operator fun <T> invoke(
 			errorMapper: ErrorMapper = DefaultErrorMapper,
-			f: TryBuilder.() -> T
+			f: Builder.() -> T
 		): Try<T> {
 			return try {
-				Success(TryBuilder.f())
+				Success(Builder.f())
 			} catch (e: FailureException) {
 				e.failure
 			} catch (t: Throwable) {
@@ -16,7 +16,7 @@ sealed class Try<out T> {
 		}
 	}
 
-	object TryBuilder {
+	object Builder {
 		fun <T> Try<T>.get(): T = when (this) {
 			is Success -> value
 			is Failure -> throw FailureException(this)
