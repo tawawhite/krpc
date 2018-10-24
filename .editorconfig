@@ -1,2 +1,4 @@
-[*.kt]
-indent_size = 4 # Fixes tab size on GitHub
+[*.{kt,kts}]
+indent_size = 4
+insert_final_newline = true
+continuation_indent_size = 4

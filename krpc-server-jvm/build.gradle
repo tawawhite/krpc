@@ -1,0 +1,8 @@
+dependencies {
+	expectedBy project(':krpc-core')
+	expectedBy project(':krpc-server')
+	compile project(':krpc-client-jvm') // this is a hack to allow client code in shared service project - it should be removed.
+	compile "io.ktor:ktor-server-core:$ktorVersion"
+	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
+	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serializationVersion"
+}

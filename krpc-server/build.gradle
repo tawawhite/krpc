@@ -1,0 +1,4 @@
+dependencies {
+	compile 'org.jetbrains.kotlin:kotlin-stdlib-common'
+	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime-common:$serializationVersion"
+}

@@ -1,9 +1,0 @@
-apply plugin: 'kotlin-platform-jvm'
-
-dependencies {
-	expectedBy project(':krpc-core')
-
-	compile "io.ktor:ktor-server-netty:$ktorVersion"
-	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
-	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serializationVersion"
-}

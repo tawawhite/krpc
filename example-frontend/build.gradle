@@ -1,0 +1,26 @@
+dependencies {
+	expectedBy project(':example-service')
+	compile project(':krpc-client-js')
+	compile "io.ktor:ktor-client-js:$ktorVersion"
+	compile 'org.jetbrains.kotlin:kotlin-stdlib-js'
+	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$serializationVersion"
+}
+
+task assembleWeb(type: Sync) {
+	configurations.compile.each { File file ->
+		from(zipTree(file.absolutePath), {
+			includeEmptyDirs = false
+			include { fileTreeElement ->
+				def path = fileTreeElement.path
+				path.endsWith(".js") && (path.startsWith("META-INF/resources/") ||
+						!path.startsWith("META-INF/"))
+			}
+		})
+	}
+	from compileKotlin2Js.destinationDir
+	into "${projectDir}/web"
+
+	dependsOn classes
+}
+
+assemble.dependsOn assembleWeb

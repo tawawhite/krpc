@@ -1,25 +1,62 @@
 buildscript {
 	ext {
-		kotlinVersion = '1.2.20'
-		ktorVersion = '0.9.2'
-		serializationVersion = '0.4.2'
+		kotlinVersion = '1.3.0-rc-190'
+		ktorVersion = '1.0.0-beta-2'
+		coroutinesVersion = '1.0.0-RC1'
+		serializationVersion = '0.8.3-rc13'
 	}
 	repositories {
-		mavenCentral()
-		maven { url "https://kotlin.bintray.com/kotlinx" }
+		jcenter()
+		maven { url "https://dl.bintray.com/kotlin/kotlin-eap/" }
 	}
 	dependencies {
-		classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}"
-		classpath "org.jetbrains.kotlinx:kotlinx-gradle-serialization-plugin:$serializationVersion"
+		classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+		classpath "org.jetbrains.kotlin:kotlin-serialization:$kotlinVersion"
 	}
-}
-
-configure(subprojects.findAll { it.name != 'krpc-core' }) {
-	apply plugin: 'kotlin'
 }
 
 project(':krpc-core') {
 	apply plugin: 'kotlin-platform-common'
+}
+
+project(':krpc-client') {
+	apply plugin: 'kotlin-platform-common'
+}
+
+project(':krpc-client-jvm') {
+	apply plugin: 'kotlin-platform-jvm'
+}
+
+project(':krpc-client-js') {
+	apply plugin: 'kotlin-platform-js'
+}
+
+project(':krpc-server') {
+	apply plugin: 'kotlin-platform-common'
+}
+
+project(':krpc-server-jvm') {
+	apply plugin: 'kotlin-platform-jvm'
+}
+
+project(':example-service') {
+	apply plugin: 'kotlin-platform-common'
+	apply plugin: 'kotlinx-serialization'
+}
+
+project(':example-server') {
+	apply plugin: 'kotlin-platform-jvm'
+	apply plugin: 'kotlinx-serialization'
+}
+
+project(':example-client') {
+	apply plugin: 'kotlin-platform-jvm'
+	apply plugin: 'kotlinx-serialization'
+}
+
+project(':example-frontend') {
+	apply plugin: 'kotlin-platform-js'
+	apply plugin: 'kotlinx-serialization'
 }
 
 configure(subprojects.findAll { it.name != 'processor-example' }) {
@@ -37,17 +74,34 @@ configure(subprojects.findAll { it.name != 'processor-example' }) {
 subprojects {
 	group = 'com.example'
 	version = '0.1.0-SNAPSHOT'
-	sourceCompatibility = 1.8
 
 	repositories {
-		mavenCentral()
+		jcenter()
 		maven { url "https://kotlin.bintray.com/kotlinx" }
 		maven { url "https://dl.bintray.com/kotlin/ktor" }
+		maven { url "https://dl.bintray.com/kotlin/kotlin-eap/" }
 	}
 
-	kotlin {
-		experimental {
-			coroutines "enable"
-		}
+	configurations {
+		ktlint
+	}
+
+	dependencies {
+		ktlint "com.github.shyiko:ktlint:0.29.0"
+	}
+
+	task ktlint(type: JavaExec, group: "verification") {
+		description = "Check Kotlin code style."
+		classpath = configurations.ktlint
+		main = "com.github.shyiko.ktlint.Main"
+		args "src/**/*.kt"
+	}
+	check.dependsOn ktlint
+
+	task ktlintFormat(type: JavaExec, group: "formatting") {
+		description = "Fix Kotlin code style deviations."
+		classpath = configurations.ktlint
+		main = "com.github.shyiko.ktlint.Main"
+		args "-F", "src/**/*.kt"
 	}
 }

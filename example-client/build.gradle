@@ -1,0 +1,7 @@
+dependencies {
+	expectedBy project(':example-service')
+	compile project(':krpc-client-jvm')
+	compile "io.ktor:ktor-client-cio:$ktorVersion"
+	compile 'org.jetbrains.kotlin:kotlin-stdlib-jdk8'
+	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serializationVersion"
+}
