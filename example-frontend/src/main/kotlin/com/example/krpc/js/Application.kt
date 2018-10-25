@@ -10,7 +10,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 fun main(args: Array<String>) {
-    val userService = UserService.client(HttpClient(Js), "", Serialization.PROTOBUF)
+    val userService = UserService.client(HttpClient(Js), "http://127.0.0.1:8080", Serialization.PROTOBUF)
     GlobalScope.launch {
         println(userService.getUser(GetRequest(1)))
     }
