@@ -10,7 +10,7 @@ import io.ktor.server.netty.Netty
 
 object UserServiceImpl : UserService {
     override suspend fun getUser(request: GetRequest): GetResponse {
-        return GetResponse(User(request.id, "Jordan", "Demeulenaere"))
+        return GetResponse(User(request.id, "Foo", "Bar"))
     }
 }
 
