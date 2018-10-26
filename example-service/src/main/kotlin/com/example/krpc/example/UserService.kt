@@ -2,7 +2,6 @@ package com.example.krpc.example
 
 import com.example.krpc.Serialization
 import com.example.krpc.makeRpc
-import io.ktor.client.HttpClient
 import kotlinx.serialization.SerialId
 import kotlinx.serialization.Serializable
 
@@ -36,12 +35,10 @@ interface UserService {
 // ###############################################################
 
 fun UserService.Companion.client(
-    httpClient: HttpClient,
-    baseUrl: String,
+    url: String,
     serialization: Serialization
 ) = object : UserService {
     override suspend fun getUser(request: GetRequest): GetResponse {
-        val url = "$baseUrl/UserService/getUser"
-        return makeRpc(httpClient, url, serialization, request, GetRequest.serializer(), GetResponse.serializer())
+        return makeRpc(url, "UserService", "getUser", serialization, request, GetRequest.serializer(), GetResponse.serializer())
     }
 }

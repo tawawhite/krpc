@@ -1,4 +1,5 @@
 dependencies {
+	compile project(':krpc-client-jvm') // this is a hack to allow client code in shared service project - it should be removed.
 	compile 'org.jetbrains.kotlin:kotlin-stdlib-common'
 	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime-common:$serializationVersion"
 }

@@ -1,7 +1,5 @@
 dependencies {
-	// This should not be needed
 	compileOnly project(':krpc-client')
-	// This should not be needed
 	compileOnly project(':krpc-server')
 
 	compile 'org.jetbrains.kotlin:kotlin-stdlib-common'

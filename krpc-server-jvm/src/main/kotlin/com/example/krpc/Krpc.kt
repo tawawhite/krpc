@@ -3,6 +3,7 @@ package com.example.krpc
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.ApplicationFeature
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.request.contentType
 import io.ktor.request.receiveText
@@ -66,15 +67,15 @@ class Krpc private constructor(configuration: Configuration) {
 
         val requestBody = call.receiveText()
         val request = when (contentType) {
-            Serialization.JSON.contentType -> JSON.parse(handler.deserializationStrategy, requestBody)
-            Serialization.PROTOBUF.contentType -> ProtoBuf.load(
+            ContentType.Application.Json -> JSON.parse(handler.deserializationStrategy, requestBody)
+            ContentType.Application.OctetStream -> ProtoBuf.load(
                 handler.deserializationStrategy,
                 requestBody.toUtf8Bytes()
             )
             else -> {
                 call.respond(
                     HttpStatusCode.UnsupportedMediaType,
-                    "ContentType '$contentType' is not supported. Must be either '${Serialization.JSON.contentType}' or '${Serialization.JSON.contentType}'."
+                    "ContentType '$contentType' is not supported. Must be either '${ContentType.Application.Json}' or '${ContentType.Application.OctetStream}'."
                 )
                 return
             }
@@ -82,11 +83,11 @@ class Krpc private constructor(configuration: Configuration) {
 
         val response = handler.run(request)
         when (contentType) {
-            Serialization.JSON.contentType -> {
+			ContentType.Application.Json -> {
                 val json = JSON.stringify(handler.serializationStrategy, response)
                 call.respondText(json, contentType)
             }
-            Serialization.PROTOBUF.contentType -> {
+			ContentType.Application.OctetStream -> {
                 val content = stringFromUtf8Bytes(ProtoBuf.dump(handler.serializationStrategy, response))
                 call.respondText(content, contentType)
             }

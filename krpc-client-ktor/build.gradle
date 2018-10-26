@@ -1,0 +1,5 @@
+dependencies {
+	compile project(':krpc-client')
+	compile "io.ktor:ktor-client-core:$ktorVersion"
+//	compile "org.jetbrains.kotlinx:kotlinx-serialization-common:$serializationVersion"
+}

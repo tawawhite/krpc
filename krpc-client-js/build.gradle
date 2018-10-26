@@ -1,6 +1,7 @@
 dependencies {
 	expectedBy project(':krpc-core')
 	expectedBy project(':krpc-client')
+	expectedBy project(':krpc-client-ktor')
 	compile "io.ktor:ktor-client-js:$ktorVersion"
 	compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime-js:$serializationVersion"
 }

@@ -23,6 +23,10 @@ project(':krpc-client') {
 	apply plugin: 'kotlin-platform-common'
 }
 
+project(':krpc-client-ktor') {
+	apply plugin: 'kotlin-platform-common'
+}
+
 project(':krpc-client-jvm') {
 	apply plugin: 'kotlin-platform-jvm'
 }
@@ -96,7 +100,7 @@ subprojects {
 		main = "com.github.shyiko.ktlint.Main"
 		args "src/**/*.kt"
 	}
-	check.dependsOn ktlint
+//	check.dependsOn ktlint
 
 	task ktlintFormat(type: JavaExec, group: "formatting") {
 		description = "Fix Kotlin code style deviations."
