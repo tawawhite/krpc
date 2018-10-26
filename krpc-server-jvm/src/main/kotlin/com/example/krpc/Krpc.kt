@@ -4,11 +4,9 @@ import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.ApplicationFeature
 import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
 import io.ktor.request.contentType
 import io.ktor.request.receiveStream
 import io.ktor.request.receiveText
-import io.ktor.response.respond
 import io.ktor.response.respondBytes
 import io.ktor.response.respondText
 import io.ktor.routing.post
@@ -53,7 +51,7 @@ class Krpc private constructor(configuration: Configuration) {
         // Get RPC handler.
         val handler = service.rpcHandler(call.parameters[rpcArg]!!)
         if (handler == null) {
-            call.respond(HttpStatusCode.NotFound, "")
+            proceed()
             return
         }
 
@@ -64,23 +62,20 @@ class Krpc private constructor(configuration: Configuration) {
     private suspend fun <I : Any, O : Any> runHandler(handler: RpcHandler<I, O>, call: ApplicationCall) {
         // TODO use Accept header
         val contentType = call.request.contentType()
-
-        val request = when (contentType) {
-            ContentType.Application.Json -> JSON.parse(handler.deserializationStrategy, call.receiveText())
-            ContentType.Application.OctetStream -> ProtoBuf.load(
-                handler.deserializationStrategy,
-                call.receiveStream().readBytes()
-            )
-            else -> {
-                call.respond(
-                    HttpStatusCode.UnsupportedMediaType,
-                    "ContentType '$contentType' is not supported. Must be either '${ContentType.Application.Json}' or '${ContentType.Application.OctetStream}'."
+        val request: Try<I> = Try {
+            when (contentType) {
+                ContentType.Application.Json -> JSON.parse(handler.deserializationStrategy, call.receiveText())
+                ContentType.Application.OctetStream -> ProtoBuf.load(
+                    handler.deserializationStrategy,
+                    call.receiveStream().readBytes()
                 )
-                return
+                else -> {
+                    raise(Error.UNIMPLEMENTED, "ContentType '$contentType' is not supported. Must be either '${ContentType.Application.Json}' or '${ContentType.Application.OctetStream}'.")
+                }
             }
         }
 
-        val response = handler.run(request)
+        val response = request.flatMap { handler.run(it) }
         when (contentType) {
             ContentType.Application.Json -> call.respondText(JSON.stringify(handler.serializationStrategy, response), contentType)
             ContentType.Application.OctetStream -> call.respondBytes(ProtoBuf.dump(handler.serializationStrategy, response), contentType)
