@@ -6,16 +6,16 @@ import io.ktor.application.ApplicationFeature
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.request.contentType
+import io.ktor.request.receiveStream
 import io.ktor.request.receiveText
 import io.ktor.response.respond
+import io.ktor.response.respondBytes
 import io.ktor.response.respondText
 import io.ktor.routing.post
 import io.ktor.routing.routing
 import io.ktor.util.AttributeKey
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.protobuf.ProtoBuf
-import kotlinx.serialization.stringFromUtf8Bytes
-import kotlinx.serialization.toUtf8Bytes
 
 class Krpc private constructor(configuration: Configuration) {
     private val services = configuration.services.associateBy { it.serviceName }
@@ -65,12 +65,11 @@ class Krpc private constructor(configuration: Configuration) {
         // TODO use Accept header
         val contentType = call.request.contentType()
 
-        val requestBody = call.receiveText()
         val request = when (contentType) {
-            ContentType.Application.Json -> JSON.parse(handler.deserializationStrategy, requestBody)
+            ContentType.Application.Json -> JSON.parse(handler.deserializationStrategy, call.receiveText())
             ContentType.Application.OctetStream -> ProtoBuf.load(
                 handler.deserializationStrategy,
-                requestBody.toUtf8Bytes()
+                call.receiveStream().readBytes()
             )
             else -> {
                 call.respond(
@@ -83,19 +82,8 @@ class Krpc private constructor(configuration: Configuration) {
 
         val response = handler.run(request)
         when (contentType) {
-            ContentType.Application.Json -> {
-                try {
-                    val json = JSON.stringify(handler.serializationStrategy, response)
-                    call.respondText(json, contentType)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    throw e
-                }
-            }
-            ContentType.Application.OctetStream -> {
-                val content = stringFromUtf8Bytes(ProtoBuf.dump(handler.serializationStrategy, response))
-                call.respondText(content, contentType)
-            }
+            ContentType.Application.Json -> call.respondText(JSON.stringify(handler.serializationStrategy, response), contentType)
+            ContentType.Application.OctetStream -> call.respondBytes(ProtoBuf.dump(handler.serializationStrategy, response), contentType)
         }
     }
 }

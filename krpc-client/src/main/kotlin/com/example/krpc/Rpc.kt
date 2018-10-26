@@ -4,10 +4,9 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.json.JSON
 import kotlinx.serialization.protobuf.ProtoBuf
-import kotlinx.serialization.stringFromUtf8Bytes
-import kotlinx.serialization.toUtf8Bytes
 
-internal expect suspend fun httpPost(url: String, body: String, bodyType: Serialization): String
+internal expect suspend fun httpPost(url: String, body: String): String
+internal expect suspend fun httpPost(url: String, body: ByteArray): ByteArray
 
 suspend fun <I : Any, O : Any> makeRpc(
     url: String,
@@ -19,14 +18,17 @@ suspend fun <I : Any, O : Any> makeRpc(
     deserializationStrategy: DeserializationStrategy<Try<O>>
 ): Try<O> {
     val postUrl = "$url/$service/$rpc"
-    val body: String = when (serialization) {
-        Serialization.JSON -> JSON.stringify(serializationStrategy, request)
-        Serialization.PROTOBUF -> stringFromUtf8Bytes(ProtoBuf.dump(serializationStrategy, request))
-    }
-    val responseBody = httpPost(postUrl, body, serialization)
     return when (serialization) {
-        Serialization.JSON -> JSON.parse(deserializationStrategy, responseBody)
-        Serialization.PROTOBUF -> ProtoBuf.load(deserializationStrategy, responseBody.toUtf8Bytes())
+        Serialization.JSON -> {
+            val body = JSON.stringify(serializationStrategy, request)
+            val response = httpPost(postUrl, body)
+            JSON.parse(deserializationStrategy, response)
+        }
+        Serialization.PROTOBUF -> {
+            val body = ProtoBuf.dump(serializationStrategy, request)
+            val response = httpPost(postUrl, body)
+            ProtoBuf.load(deserializationStrategy, response)
+        }
     }
 }
 
