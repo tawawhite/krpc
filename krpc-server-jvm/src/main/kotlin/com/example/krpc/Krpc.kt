@@ -83,11 +83,16 @@ class Krpc private constructor(configuration: Configuration) {
 
         val response = handler.run(request)
         when (contentType) {
-			ContentType.Application.Json -> {
-                val json = JSON.stringify(handler.serializationStrategy, response)
-                call.respondText(json, contentType)
+            ContentType.Application.Json -> {
+                try {
+                    val json = JSON.stringify(handler.serializationStrategy, response)
+                    call.respondText(json, contentType)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    throw e
+                }
             }
-			ContentType.Application.OctetStream -> {
+            ContentType.Application.OctetStream -> {
                 val content = stringFromUtf8Bytes(ProtoBuf.dump(handler.serializationStrategy, response))
                 call.respondText(content, contentType)
             }

@@ -1,7 +1,9 @@
 package com.example.krpc.example
 
 import com.example.krpc.Serialization
+import com.example.krpc.Try
 import com.example.krpc.makeRpc
+import com.example.krpc.makeRpcOrThrow
 import kotlinx.serialization.SerialId
 import kotlinx.serialization.Serializable
 
@@ -28,6 +30,8 @@ interface UserService {
     companion object;
 
     suspend fun getUser(request: GetRequest): GetResponse
+
+    suspend fun tryGetUser(request: GetRequest): Try<GetResponse>
 }
 
 // ###############################################################
@@ -39,6 +43,26 @@ fun UserService.Companion.client(
     serialization: Serialization
 ) = object : UserService {
     override suspend fun getUser(request: GetRequest): GetResponse {
-        return makeRpc(url, "UserService", "getUser", serialization, request, GetRequest.serializer(), GetResponse.serializer())
+        return makeRpcOrThrow(
+            url,
+            "UserService",
+            "getUser",
+            serialization,
+            request,
+            GetRequest.serializer(),
+            Try.serializer(GetResponse.serializer())
+        )
+    }
+
+    override suspend fun tryGetUser(request: GetRequest): Try<GetResponse> {
+        return makeRpc(
+            url,
+            "UserService",
+            "tryGetUser",
+            serialization,
+            request,
+            GetRequest.serializer(),
+            Try.serializer(GetResponse.serializer())
+        )
     }
 }

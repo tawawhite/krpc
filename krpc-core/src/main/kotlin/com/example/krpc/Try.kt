@@ -1,5 +1,13 @@
 package com.example.krpc
 
+import kotlinx.serialization.CompositeDecoder
+import kotlinx.serialization.Decoder
+import kotlinx.serialization.Encoder
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialDescriptor
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.internal.SerialClassDescImpl
+
 sealed class Try<out T> {
     companion object {
         inline operator fun <T> invoke(
@@ -13,6 +21,63 @@ sealed class Try<out T> {
             } catch (t: Throwable) {
                 Failure(errorMapper.map(t), t.message)
             }
+        }
+
+        fun <T> serializer(element: KSerializer<T>): KSerializer<Try<T>> = TrySerializer(element)
+    }
+
+    private class TrySerializer<T>(private val element: KSerializer<T>) : KSerializer<Try<T>> {
+        object TryDesc : SerialClassDescImpl("") {
+            init {
+                addElement("value", isOptional = true)
+                addElement("error", isOptional = true)
+                addElement("message", isOptional = true)
+            }
+        }
+
+        override val descriptor: SerialDescriptor = TryDesc
+
+        override fun deserialize(input: Decoder): Try<T> {
+            @Suppress("NAME_SHADOWING")
+            val input = input.beginStructure(descriptor, element)
+
+            var value: Any? = null
+            var error: Error? = null
+            var message: String? = null
+
+            mainLoop@ while (true) {
+                when (val index = input.decodeElementIndex(descriptor)) {
+                    0 -> value = input.decodeSerializableElement(descriptor, 0, element)
+                    1 -> error = Error.valueOf(input.decodeStringElement(descriptor, 1))
+                    2 -> message = input.decodeStringElement(descriptor, 2)
+                    CompositeDecoder.READ_DONE -> break@mainLoop
+                    else -> throw SerializationException("Unsupport element index: $index")
+                }
+            }
+
+            input.endStructure(descriptor)
+            return if (error != null) {
+                Failure(error, message)
+            } else {
+                @Suppress("UNCHECKED_CAST")
+                Success(value as T)
+            }
+        }
+
+        override fun serialize(output: Encoder, obj: Try<T>) {
+            @Suppress("NAME_SHADOWING")
+            val output = output.beginStructure(descriptor, element)
+            if (obj is Success) {
+                output.encodeSerializableElement(descriptor, 0, element, obj.value)
+            } else {
+                @Suppress("NAME_SHADOWING")
+                val obj = obj as Failure
+                output.encodeStringElement(descriptor, 1, obj.error.name)
+                if (obj.message != null) {
+                    output.encodeStringElement(descriptor, 2, obj.message)
+                }
+            }
+            output.endStructure(descriptor)
         }
     }
 
@@ -53,7 +118,7 @@ enum class Error {
 }
 
 /** Throwing a [FailureException] in a Try {} block will return [failure] as the result. */
-class FailureException(val failure: Failure) : Exception() {
+data class FailureException(val failure: Failure) : Exception() {
     constructor(error: Error, message: String? = null) : this(Failure(error, message))
 }
 

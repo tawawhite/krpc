@@ -1,8 +1,10 @@
 package com.example.krpc.example
 
+import com.example.krpc.Error
 import com.example.krpc.Krpc
 import com.example.krpc.RpcHandler
 import com.example.krpc.ServiceHandler
+import com.example.krpc.Try
 import io.ktor.application.install
 import io.ktor.features.CORS
 import io.ktor.server.engine.embeddedServer
@@ -10,7 +12,13 @@ import io.ktor.server.netty.Netty
 
 object UserServiceImpl : UserService {
     override suspend fun getUser(request: GetRequest): GetResponse {
+        if (request.id < 0) throw NoSuchElementException("Message from exception")
         return GetResponse(User(request.id, "Foo", "Bar"))
+    }
+
+    override suspend fun tryGetUser(request: GetRequest) = Try {
+        if (request.id < 0) raise(Error.INVALID_ARGUMENT, "Failure message")
+        GetResponse(User(request.id, "Foo", "Bar"))
     }
 }
 
@@ -34,7 +42,8 @@ fun UserService.Companion.handler(userService: UserService) = object : ServiceHa
 
     override fun rpcHandler(rpc: String): RpcHandler<*, *>? {
         return when (rpc) {
-            "getUser" -> com.example.krpc.rpcHandler(GetRequest.serializer(), GetResponse.serializer(), userService::getUser)
+            "getUser" -> com.example.krpc.unsafeRpcHandler(GetRequest.serializer(), Try.serializer(GetResponse.serializer()), userService::getUser)
+            "tryGetUser" -> com.example.krpc.rpcHandler(GetRequest.serializer(), Try.serializer(GetResponse.serializer()), userService::tryGetUser)
             else -> null
         }
     }

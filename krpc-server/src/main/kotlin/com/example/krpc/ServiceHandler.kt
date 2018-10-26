@@ -12,20 +12,28 @@ interface ServiceHandler {
 interface RpcHandler<I : Any, O : Any> {
     val deserializationStrategy: DeserializationStrategy<I>
 
-    val serializationStrategy: SerializationStrategy<O>
+    val serializationStrategy: SerializationStrategy<Try<O>>
 
-    suspend fun run(request: I): O
+    suspend fun run(request: I): Try<O>
+}
+
+fun <I : Any, O : Any> unsafeRpcHandler(
+    deserializationStrategy: DeserializationStrategy<I>,
+    serializationStrategy: SerializationStrategy<Try<O>>,
+    run: suspend (I) -> O
+): RpcHandler<I, O> {
+    return rpcHandler(deserializationStrategy, serializationStrategy) { input -> Try { run(input) } }
 }
 
 fun <I : Any, O : Any> rpcHandler(
     deserializationStrategy: DeserializationStrategy<I>,
-    serializationStrategy: SerializationStrategy<O>,
-    run: suspend (I) -> O
+    serializationStrategy: SerializationStrategy<Try<O>>,
+    run: suspend (I) -> Try<O>
 ): RpcHandler<I, O> {
     return object : RpcHandler<I, O> {
         override val deserializationStrategy: DeserializationStrategy<I> = deserializationStrategy
-        override val serializationStrategy: SerializationStrategy<O> = serializationStrategy
+        override val serializationStrategy: SerializationStrategy<Try<O>> = serializationStrategy
 
-        override suspend fun run(request: I): O = run(request)
+        override suspend fun run(request: I): Try<O> = run(request)
     }
 }
