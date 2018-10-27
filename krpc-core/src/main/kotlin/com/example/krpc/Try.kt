@@ -11,7 +11,7 @@ import kotlinx.serialization.internal.SerialClassDescImpl
 sealed class Try<out T> {
     companion object {
         inline operator fun <T> invoke(
-            errorMapper: ErrorMapper = DefaultErrorMapper,
+            noinline errorMapper: ErrorMapper = ErrorMappers.DEFAULT,
             f: Builder.() -> T
         ): Try<T> {
             return try {
@@ -19,7 +19,7 @@ sealed class Try<out T> {
             } catch (e: FailureException) {
                 e.failure
             } catch (t: Throwable) {
-                Failure(errorMapper.map(t), t.message)
+                Failure(errorMapper(t), t.message)
             }
         }
 
@@ -122,12 +122,11 @@ data class FailureException(val failure: Failure) : Exception() {
     constructor(error: Error, message: String? = null) : this(Failure(error, message))
 }
 
-interface ErrorMapper {
-    fun map(t: Throwable): Error
-}
+typealias ErrorMapper = (t: Throwable) -> Error
 
-object DefaultErrorMapper : ErrorMapper {
-    override fun map(t: Throwable): Error = when (t) {
+object ErrorMappers {
+    val INTERNAL: ErrorMapper = { Error.INTERNAL }
+    val DEFAULT: ErrorMapper = { throwable -> when (throwable) {
         is IllegalArgumentException -> Error.INVALID_ARGUMENT
         is IllegalStateException, is NullPointerException -> Error.INTERNAL
         is IndexOutOfBoundsException -> Error.OUT_OF_RANGE
@@ -135,6 +134,7 @@ object DefaultErrorMapper : ErrorMapper {
         is AssertionError -> Error.FAILED_PRECONDITION
         is NoSuchElementException -> Error.NOT_FOUND
         else -> Error.UNKNOWN
+        }
     }
 }
 
@@ -149,10 +149,12 @@ inline fun <A, B> Try<A>.map(f: (A) -> B): Try<B> = when (this) {
     is Failure -> this
 }
 
-inline fun <A, B> Try<A>.flatMap(f: (A) -> Try<B>): Try<B> = when (this) {
-    is Success -> f(value)
+inline fun <A> Try<Try<A>>.flatten(): Try<A> = when (this) {
+    is Success -> this.value
     is Failure -> this
 }
+
+inline fun <A, B> Try<A>.flatMap(f: (A) -> Try<B>): Try<B> = map(f).flatten()
 
 inline fun <A> Try<A>.recover(f: (Error, String?) -> A): Try<A> = when (this) {
     is Success -> this

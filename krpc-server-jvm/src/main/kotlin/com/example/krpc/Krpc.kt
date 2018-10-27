@@ -62,7 +62,7 @@ class Krpc private constructor(configuration: Configuration) {
     private suspend fun <I : Any, O : Any> runHandler(handler: RpcHandler<I, O>, call: ApplicationCall) {
         // TODO use Accept header
         val contentType = call.request.contentType()
-        val request: Try<I> = Try {
+        val request: Try<I> = Try(ErrorMappers.INTERNAL.printingStackTraces()) {
             when (contentType) {
                 ContentType.Application.Json -> JSON.parse(handler.deserializationStrategy, call.receiveText())
                 ContentType.Application.OctetStream -> ProtoBuf.load(
@@ -70,15 +70,34 @@ class Krpc private constructor(configuration: Configuration) {
                     call.receiveStream().readBytes()
                 )
                 else -> {
-                    raise(Error.UNIMPLEMENTED, "ContentType '$contentType' is not supported. Must be either '${ContentType.Application.Json}' or '${ContentType.Application.OctetStream}'.")
+                    raise(Error.INVALID_ARGUMENT, "ContentType '$contentType' is not supported. Must be either '${ContentType.Application.Json}' or '${ContentType.Application.OctetStream}'.")
                 }
             }
         }
 
         val response = request.flatMap { handler.run(it) }
+        val serializationStrategy = handler.serializationStrategy
         when (contentType) {
-            ContentType.Application.Json -> call.respondText(JSON.stringify(handler.serializationStrategy, response), contentType)
-            ContentType.Application.OctetStream -> call.respondBytes(ProtoBuf.dump(handler.serializationStrategy, response), contentType)
+            ContentType.Application.Json -> {
+                val serializedResponse = Try(ErrorMappers.INTERNAL.printingStackTraces()) {
+                    JSON.stringify(serializationStrategy, response)
+                }
+                val text = when (serializedResponse) {
+                    is Success -> serializedResponse.value
+                    is Failure -> JSON.stringify(serializationStrategy, serializedResponse)
+                }
+                call.respondText(text, contentType)
+            }
+            ContentType.Application.OctetStream -> {
+                val serializedResponse = Try(ErrorMappers.INTERNAL.printingStackTraces()) {
+                    ProtoBuf.dump(serializationStrategy, response)
+                }
+                val bytes = when (serializedResponse) {
+                    is Success -> serializedResponse.value
+                    is Failure -> ProtoBuf.dump(serializationStrategy, serializedResponse)
+                }
+                call.respondBytes(bytes, contentType)
+            }
         }
     }
 }
